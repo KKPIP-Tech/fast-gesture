@@ -99,61 +99,56 @@ class UNet(nn.Module):
         x = self.up4(x, x1)
         logits = self.outc(x)
         return logits
+    
 
-
-class AdaptiveConcatPool2d(nn.Module):
-    """自适应池化层，用于处理不同数量的关键点"""
-    def __init__(self, sz=None):
+class HeatmapCNN(nn.Module):
+    """用于处理热力图的卷积神经网络"""
+    def __init__(self, n_keypoints, n_features):
         super().__init__()
-        sz = sz or (1, 1)
-        self.ap = nn.AdaptiveAvgPool2d(sz)
-        self.mp = nn.AdaptiveMaxPool2d(sz)
+        self.conv1 = nn.Conv2d(n_keypoints, 64, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        # 假设经过卷积操作后，特征图的尺寸减半
+        self.fc = nn.Linear(128 * 28 * 28, n_features)  # 调整特征图大小
 
     def forward(self, x):
-        return torch.cat([self.mp(x), self.ap(x)], 1)
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = torch.flatten(x, start_dim=1)
+        x = self.fc(x)
+        return x
 
 
-class KeyPointNet(nn.Module):
-    def __init__(self, n_channels, n_classes, n_keypoints, keypoint_dim):
-        super(KeyPointNet, self).__init__()
+class GestureNet(nn.Module):
+    def __init__(self, n_channels, n_classes, n_keypoints, img_size, gesture_types):
+        super(GestureNet, self).__init__()
         self.unet = UNet(n_channels, n_classes)
-        self.adaptive_pool = AdaptiveConcatPool2d()
-        self.keypoint_mlp = nn.Sequential(
-            nn.Linear(n_keypoints * keypoint_dim * 2, 512),
-            nn.ReLU(),
-            nn.Linear(512, 256),
-            nn.ReLU(),
-            nn.Linear(256, n_keypoints * 3)  # 每个关键点的类别、x、y
-        )
-        self.class_mlp = nn.Sequential(
-            nn.Linear(256, 128),
-            nn.ReLU(),
-            nn.Linear(128, n_classes)  # 物体类别
-        )
+        self.heatmap_cnn = HeatmapCNN(n_keypoints, img_size * img_size)
+        # 假设全连接层的输入尺寸需要动态计算
+        # 这里先初始化为 None，实际尺寸将在第一次前向传播时计算
+        self.fc1 = None
+        self.fc2 = nn.Linear(512, gesture_types * 5)  # 每个手势类型的 x_min, y_min, x_max, y_max, hand_label
+        self.gesture_types = gesture_types
 
-    def forward(self, image, keypoints):
-        # 处理图像以提取特征
-        features = self.unet(image)
+    def forward(self, image, heatmaps):
+        img_features = self.unet(image)  # 假设UNet输出尺寸是 [batch_size, 64, 56, 56]
 
-        # 将特征图平坦化
-        flattened_features = torch.flatten(features, start_dim=1)
+        if self.fc1 is None:
+            _, c, h, w = img_features.size()
+            img_features_size = c * h * w
+            heatmap_features_size = 128 * 28 * 28  # 调整HeatmapCNN输出尺寸
+            total_features_size = img_features_size + heatmap_features_size
+            self.fc1 = nn.Linear(total_features_size, 512).to(img_features.device)
 
-        # 自适应池化关键点数据
-        pooled_keypoints = self.adaptive_pool(keypoints)
+        img_features = img_features.view(img_features.size(0), -1)
+        heatmap_features = self.heatmap_cnn(heatmaps)  # 确保heatmap_features的尺寸正确
+        combined_features = torch.cat([img_features, heatmap_features], dim=1)
 
-        # 将平坦化的特征与池化后的关键点数据结合
-        combined_input = torch.cat([flattened_features, pooled_keypoints.flatten(start_dim=1)], dim=1)
+        
+        gesture_output = self.fc2(combined_features)
+        gesture_output = gesture_output.view(-1, self.gesture_types, 5)
+        return gesture_output
 
-        # 使用MLP处理组合数据
-        keypoint_output = self.keypoint_mlp(combined_input)
 
-        # 从关键点输出中提取用于物体类别预测的特征
-        class_features = keypoint_output[:, :256]  # 假设第一个MLP的输出的前256维用于类别预测
-        class_output = self.class_mlp(class_features)
-
-        # 重塑输出格式
-        keypoint_output = keypoint_output.view(-1, n_keypoints, 3)  # -1 for batch size, 3 for class, x, y
-        return class_output, keypoint_output
 
 
 if __name__ == "__main__":
@@ -169,7 +164,7 @@ if __name__ == "__main__":
     keypoint_dim = 2 # 假设每个关键点的维度为2（x, y坐标）
 
     # 创建网络实例，并将其移至正确的设备
-    model = KeyPointNet(n_channels, n_classes, n_keypoints, keypoint_dim).to(device)
+    model = GestureNet(n_channels, n_classes, n_keypoints, keypoint_dim).to(device)
 
     # 假设的输入大小
     image_size = (n_channels, 224, 224)  # 例如，224x224的图像

@@ -1,0 +1,26 @@
+# 作者：Da Kuang
+# 创建时间：2023/02/10
+# 修改时间：2023/12/17
+
+# 配置文件内容如下：
+
+#     root: 手势数据集的根目录，用于指定数据集存储的文件夹路径。
+#     nc: 手势类别的数量，即数据集中不同手势的种类数量。
+#     resolution: 图像分辨率。
+#     names: 手势类别的名称列表，包含了每个手势类别的名称。
+
+root: "/home/kd/WD_1_Data4T/Datasets/AugmaGesture"
+
+resolution: [1280, 720]
+
+nc: 4  # names count
+
+names: ["one", "two", "five", "hold", "pickup"]
+
+kc: 21  # keypoints count
+
+kernel_size: [15, 15]
+sigma_x: 0
+sigma_y: 0
+
+
