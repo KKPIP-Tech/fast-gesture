@@ -37,6 +37,7 @@ class Datasets(torch.utils.data.Dataset):
         datasets_root = config['root']
         datasets_resolution = config['resolution']
         names = config['names']
+        self.names = names
         self.nc = int(config['nc'])
         self.kc = int(config['kc'])
         
@@ -55,13 +56,13 @@ class Datasets(torch.utils.data.Dataset):
                 for filename in datapack[2]:
                     image_path = search_images_path + filename
                     label_path = search_labels_path + filename.replace(".jpg", ".json")
-                    images_path.append([image_path, label_path])
+                    images_path.append([image_path, label_path, names.index(name)])
         self.images_path = images_path
         
     def __getitem__(self, index):
         while True:
             # 应用数据增强到图像
-            image_path, label_path = self.images_path[index]
+            image_path, label_path, name_index = self.images_path[index]
             
             # image process --------
             original_image = cv2.imread(image_path)
@@ -116,7 +117,7 @@ class Datasets(torch.utils.data.Dataset):
                 y_max = max(y_cache) * img_height-1
                 y_max = y_max if y_max < img_height else img_height - 1
                 
-                gesture_type.append(np.array([hand_label, x_min, y_min, x_max, y_max]))
+                gesture_type.append(np.array([hand_label, x_min, y_min, x_max, y_max, name_index]))
             break
         
         for cnt in range(len(landmarks)):
@@ -147,3 +148,5 @@ class Datasets(torch.utils.data.Dataset):
         
     def __len__(self):
         return len(self.images_path)
+
+
