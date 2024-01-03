@@ -4,6 +4,7 @@ from time import time, sleep
 import argparse
 
 import torch
+from torch import nn
 from torch import optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -44,39 +45,33 @@ def train(opt, save_path):
         num_workers=opt.workers,
         shuffle=opt.shuffle
     )
-    
-     # 加载模型
-    model = GestureNet(n_channels=3, n_classes=21, img_size=opt.img_size, gesture_types=5).to(device)
-    
-    # 定义损失函数和优化器
-    criterion = torch.nn.MSELoss()
+    # 初始化模型
+    # num_heatmaps = len(datasets[0][1])  # Heatmap 的数量
+    # num_hand_types = 2  # 手的类别数量（0 或 1）
+    # num_gesture_types = opt.num_gesture_types  # 手势类别的数量，需要在 opt 中指定
+    model = GestureNet(21, 5).to(device)
+
+    criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=opt.lr)
 
-    # 训练循环
     for epoch in range(opt.epochs):
         model.train()
         total_loss = 0
-        for index, datapack in enumerate(tqdm(dataloader, desc=f"Epoch {epoch} ->", bar_format="{l_bar}{bar}{r_bar}", colour="green", unit=" batches")):
-            image, landmarks, gesture_type, _ = datapack
-            image = image.to(device)
-            gesture_type = gesture_type.to(device)
+        for index, (images, heatmaps, gesture_types) in enumerate(tqdm(dataloader, desc=f"Epoch {epoch}", unit=" batches")):
+            images = images.to(device)
+            heatmaps = heatmaps.to(device)
+            gesture_types = gesture_types.to(device)
 
+            outputs = model(heatmaps, gesture_types)
+
+            # 假设损失计算基于手势类型预测
+            loss = criterion(outputs, gesture_types[:, :, :5])  # 根据实际情况调整
+            total_loss += loss.item()
             optimizer.zero_grad()
-            outputs = model(image, landmarks)
-            loss = criterion(outputs, gesture_type)
             loss.backward()
             optimizer.step()
 
-            total_loss += loss.item()
-
-        # 打印每个周期的损失
-        print(f"Epoch {epoch}, Loss: {total_loss / len(dataloader)}")
-        
-        # 保存每个周期的模型
-        torch.save(model.state_dict(), os.path.join(save_path, f"model_epoch_{epoch}.pth"))
-
-    print("Training completed.")
-
+        print(f"Epoch [{epoch+1}/{opt.epochs}], Loss: {total_loss/len(dataloader)}")
 
 def run(opt):
 

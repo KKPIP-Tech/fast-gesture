@@ -41,7 +41,6 @@ class Datasets(torch.utils.data.Dataset):
         self.nc = int(config['nc'])
         self.kc = int(config['kc'])
         
-        
         self.kernel_size = config['kernel_size']
         self.sigma_x = config['sigma_x']
         self.sigma_y = config['sigma_y']
@@ -103,21 +102,9 @@ class Datasets(torch.utils.data.Dataset):
                         x_cache.append(x)
                         y_cache.append(y)
                         z_cache.append(z)
+                        gesture_type.append(np.array([hand_label, id, x, y, name_index]))
                     except:
                         continue
-                x_min = min(x_cache) * img_width-1
-                x_min = x_min if x_min >= 0 else 0
-                
-                y_min = min(y_cache) * img_height-1
-                y_min = y_min if y_min >= 0 else 0
-                
-                x_max = max(x_cache) * img_width-1
-                x_max = x_max if x_max < img_width else img_width - 1
-                
-                y_max = max(y_cache) * img_height-1
-                y_max = y_max if y_max < img_height else img_height - 1
-                
-                gesture_type.append(np.array([hand_label, x_min, y_min, x_max, y_max, name_index]))
             break
         
         for cnt in range(len(landmarks)):
@@ -144,7 +131,7 @@ class Datasets(torch.utils.data.Dataset):
         landmarks = torch.tensor(np.array(landmarks), dtype=torch.float32)
         gesture_type = torch.tensor(np.array(gesture_type), dtype=torch.float32)
             
-        return letterbox_image, landmarks, gesture_type, image_path
+        return letterbox_image, landmarks, gesture_type
         
     def __len__(self):
         return len(self.images_path)
