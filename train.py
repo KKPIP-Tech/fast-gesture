@@ -62,7 +62,7 @@ def train(opt, save_path):
             heatmaps = heatmaps.to(device)
             gesture_types = gesture_types.to(device)
 
-            outputs = model(heatmaps, gesture_types)
+            outputs = model(images, heatmaps, gesture_types)
 
             # 假设损失计算基于手势类型预测
             loss = criterion(outputs, gesture_types[:, :, :5])  # 根据实际情况调整
@@ -82,7 +82,7 @@ def run(opt):
 
 if __name__ == "__main__":
     parse = argparse.ArgumentParser()
-    parse.add_argument('--device', type=str, default='cpu', help='cuda or cpu')
+    parse.add_argument('--device', type=str, default='cuda', help='cuda or cpu')
     parse.add_argument('--batch_size', type=int, default=1, help='batch size')
     parse.add_argument('--img_size', type=int, default=256, help='trian img size')
     parse.add_argument('--epochs', type=int, default=300, help='max train epoch')

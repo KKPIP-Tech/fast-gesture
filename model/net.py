@@ -77,50 +77,51 @@ class UNet(nn.Module):
 
 
 class GestureNet(nn.Module):
-    def __init__(self, num_heatmaps, num_gesture_types):
+    def __init__(self, num_heatmaps, num_gesture_types, image_channels=3, UNet_output_dim=512):
         super(GestureNet, self).__init__()
-        self.unet = UNet(in_channels=1, out_channels=1)
         self.num_heatmaps = num_heatmaps
 
+        # U-Net 结构
+        self.unet = UNet(in_channels=image_channels + num_heatmaps, out_channels=num_heatmaps)
+
+        # U-Net 输出尺寸调整层
+        self.unet_output_adjust = nn.Linear(UNet_output_dim, 256)
+
+        # 关键点信息处理 MLP
         self.keypoint_mlp = nn.Sequential(
-            nn.Linear(5, 128),  # 5 个元素：手的类别、关键点 ID、x、y、手势的类别
+            nn.Linear(5, 128),
             nn.ReLU(),
-            nn.Linear(128, 64)  # 输出一个较小的特征向量
+            nn.Linear(128, 64)
         )
 
+        # 综合特征处理 MLP
         self.combined_mlp = nn.Sequential(
-            nn.Linear(num_heatmaps * 64 + 64, 256),  # 加上一个关键点的特征向量大小
+            nn.Linear(256 + 64, 256),
             nn.ReLU(),
             nn.Linear(256, num_gesture_types)
         )
 
-    def forward(self, heatmaps, gesture_types):
-        batch_size = heatmaps.shape[0]
+    def forward(self, image, heatmaps, gesture_types):
+        batch_size = image.shape[0] 
 
-        # 处理 Heatmaps
-        unet_features = [self.unet(heatmaps[:, i, :, :].unsqueeze(1)).view(batch_size, -1) for i in range(self.num_heatmaps)]
-        unet_features = torch.cat(unet_features, dim=1)
-
-        # 确保 unet_features 的大小正确
-        # 例如，如果 unet_features 的大小不是期望的，可以进行必要的调整
-        # unet_features = unet_features[:, :期望的大小]
+        # 将原始图像和 Heatmaps 合并并通过 U-Net 处理
+        combined_input = torch.cat([image, heatmaps], dim=1)
+        unet_output = self.unet(combined_input)
+        unet_features = self.unet_output_adjust(unet_output.view(batch_size, -1))
 
         # 处理 gesture_types 中的每个关键点
-        if gesture_types.shape[2] != 5:
-            raise ValueError("gesture_types 的每个元素应该有 5 个维度 (手的类别, 关键点 ID, x, y, 手势的类别)")
         keypoint_features = [self.keypoint_mlp(gesture_types[:, i, :]) for i in range(gesture_types.shape[1])]
         keypoint_features = torch.stack(keypoint_features, dim=1).sum(dim=1)
 
-        # 结合 Heatmap 特征和关键点特征
-        combined = torch.cat([unet_features, keypoint_features], dim=1)
+        # 结合 U-Net 输出和 gesture_types
+        combined_features = torch.cat([unet_features, keypoint_features], dim=1)
 
-        # 确保 combined 的大小与 combined_mlp 的第一个线性层的期望输入大小匹配
-        # combined = combined[:, :期望的大小]
-
-        # 通过 MLP 进行预测
-        output = self.combined_mlp(combined)
+        # 通过 MLP 处理
+        output = self.combined_mlp(combined_features)
 
         return output
+
+
 
 if __name__ == "__main__":
     # 示例：创建网络实例
