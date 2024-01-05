@@ -57,10 +57,14 @@ def train(opt, save_path):
     
     # 定义损失函数和优化器
     criterion = torch.nn.MSELoss()  # 可以根据需要选择适当的损失函数
-    optimizer = optim.Adam(net.parameters(), lr=learning_rate)
+    criterion.to(device=device)
+    optimizer = optim.SGD(net.parameters(), lr=learning_rate)
 
     for epoch in range(opt.epochs):
         # model.train()
+        total_loss = 0.0
+        min_loss = 100000
+        max_loss = 10
         running_loss = 0.0
         net.train()  # 设置为训练模式
         pbar = tqdm(dataloader, desc=f"Epoch {epoch}", unit=" batches")
@@ -95,11 +99,20 @@ def train(opt, save_path):
             optimizer.step()
 
             # 打印统计信息
-            running_loss += loss.item()
+            total_loss += loss.item()
+            
+            if loss < min_loss:
+                min_loss = loss
+            if loss > max_loss:
+                max_loss = loss
+            
+            avg_loss = total_loss / (index+1)
+            
             print(f"loss item: {loss.item()}")
             # if i % 10 == 9:  # 每10个batch打印一次
-            print(f"[{epoch + 1}] loss: {running_loss / 10:.3f}")
- 
+            print(f"[{epoch + 1}] avg_loss: {avg_loss}")
+            # torch.save(net.state_dict(), os.path.join(model_save_path, f'model_epoch_{epoch}.pth'))
+
 
     print('Finished Training')
 
