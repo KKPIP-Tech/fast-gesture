@@ -21,13 +21,12 @@ class Datasets(torch.utils.data.Dataset):
     def __init__(self, dataset_conf, img_size) -> None:
         
         yaml_file = dataset_conf + '/config.yaml'
-        print(dataset_conf)
-        sleep(2)
+        print(f"Config File: {yaml_file}")
         
         if isinstance(img_size, int):
-            self.height, self.weight = img_size, img_size
+            self.height, self.width = img_size, img_size
         elif isinstance(img_size, list):
-            self.height, self.weight = img_size
+            self.height, self.width = img_size
         else:
             raise ValueError("img_size is not int or list")
         
@@ -45,6 +44,8 @@ class Datasets(torch.utils.data.Dataset):
         self.sigma_x = config['sigma_x']
         self.sigma_y = config['sigma_y']
         
+        self.max_hand_num = config['max_hand_num']
+        
         print(f"names: {names}")
         
         images_path = []
@@ -60,78 +61,106 @@ class Datasets(torch.utils.data.Dataset):
         
     def __getitem__(self, index):
         while True:
-            # 应用数据增强到图像
+            # 图像的路径，图像及其标签的路径，类别索引
             image_path, label_path, name_index = self.images_path[index]
             
-            # image process --------
+            # 图像处理 --------------
             original_image = cv2.imread(image_path)
-            img_height, img_width = original_image.shape[:2]
-            letterbox_image, scale_ratio, left_padding, top_padding = letterbox(
+            image_height, image_width = original_image.shape[:2]
+            letterbox_image = letterbox(
                 image=original_image,
-                target_shape=[self.height, self.weight],
+                target_shape=[self.height, self.width],
                 fill_color=(114, 114, 114)
-            )
+            )[0]
             
-            zero_image = np.zeros((img_height, img_width))
+            # cv2.imshow("letterbox image", letterbox_image)
             
-            # cv2.imshow("letterbox_image", letterbox_image)
-            
-            # label process --------
-            landmarks = [zero_image.copy() for _ in range(self.kc)]
-            gesture_type = []
+            # Labels 处理 ------------
             with open(label_path) as label_content:
                 json_data = json.load(label_content)
-            if len(json_data) == 0:
+            if len(json_data) == 0  :
+                # 如果 json label 当中没有任何数据
+                while True:
+                    random_int = random.randint(
+                        (index - len(self.images_path)),
+                        (len(self.images_path) - index)
+                    )
+                    temp_index = index + random_int
+                    if 0 < temp_index < len(self.images_path):
+                        index += random_int
+                        break
                 continue
             
-            for one_object in json_data:
-                x_cache = []
-                y_cache = []
-                z_cache = []
-                # Left: 0; Right: 1
-                hand_label = 0 if one_object['hand_label'] == "Left" else 1
-                points = one_object['points']
-                for single_point in points:
-                    try:
-                        id = int(single_point['id'])
-                        x = float(single_point['x'])
-                        y = float(single_point['y'])
-                        z = float(single_point['z'])
-                        heatmap = landmarks[id]
-                        heatmap[int(y*img_height-1)][int(x*img_width-1)] = 255
-                        x_cache.append(x)
-                        y_cache.append(y)
-                        z_cache.append(z)
-                        gesture_type.append(np.array([hand_label, id, x, y, name_index]))
-                    except:
-                        continue
-            break
-        
-        for cnt in range(len(landmarks)):
-
-            heatmap = landmarks[cnt]
-            heatmap = cv2.GaussianBlur(heatmap, 
+            # 原始的遮罩
+            zero_image = np.zeros((image_height, image_width))
+            
+            # 按照手的最大数量填充 object_labels 和 type_labels 以确保在多 Workers 和多 Batch Size 时不会出现尺寸错误的问题
+            object_labels = [[np.zeros((self.height, self.width)) for _ in range(self.kc)] for _ in range(self.max_hand_num)]  # 每个手的关键点及手势类别数据为一个元素
+            type_labels = [[np.asarray(19)] for _ in range(self.max_hand_num)]  # 其索引值对应 object_labels 当中的元素位置，用于存储对应手的手势类别
+            
+            hand_cnt = 0
+            for one_hand_data in json_data:
+                # 处理单个手的数据
+                heatmaps = [zero_image.copy() for _ in range(self.kc)]  # 跟据关键点的总数生成对应数量的 heatmap
+                
+                # # Left: 0; Right: 1
+                # hand_label = 0 if one_hand_data['hand_label'] == "Left" else 1 
+                
+                key_points = one_hand_data['points']
+                
+                for keypoint in key_points:
+                    # 处理单个点的数据
+                    heatmaps_index = int(keypoint['id'])
+                    x = float(keypoint['x'])
+                    x = x if 0 <= x <= 1 else 1
+                    y = float(keypoint['y'])
+                    y = y if 0 <= y <= 1 else 1
+                    heatmap = heatmaps[heatmaps_index]
+                    heatmap[int(y*image_height-1)][int(x*image_width-1)] = 255
+                 
+                for heatmaps_index in range(len(heatmaps)):
+                    # 对每一张 Heatmap 进行高斯模糊处理
+                    heatmap = heatmaps[heatmaps_index]
+                    heatmap = cv2.GaussianBlur(heatmap, 
                                        self.kernel_size, 
                                        self.sigma_x, 
                                        self.sigma_y)
-            heatmap_amax = np.amax(heatmap)
-            if heatmap_amax != 0:
-                heatmap /= heatmap_amax / 255
-            heatmap /= 255.0
-            heatmap = letterbox(
-                image=heatmap,
-                target_shape=[self.height, self.weight],
-                fill_color=0,
-                is_mask=True
-            )[0]
-
-            landmarks[cnt] = np.array(heatmap)
+                    heatmap_amax = np.amax(heatmap)
+                    if heatmap_amax != 0:
+                        heatmap /= heatmap_amax / 255
+                    heatmap /= 255.0
+                    
+                    letterbox_heatmap = letterbox(
+                        image=heatmap,
+                        target_shape=[self.height, self.width],
+                        fill_color=0,
+                        is_mask=True
+                    )[0]
+                    
+                    heatmaps[heatmaps_index] = letterbox_heatmap
+                    
+                    # cv2.imshow("letterbox heatmap", letterbox_heatmap)
+                    # cv2.waitKey(0)
+                
+                # 将 Heatmap 以及 该组 Heatmap 所属的类别存入 object_labels
+                # print(f"heatmaps: {heatmaps}")
+                # print(f"name_index: {name_index}")
+                
+                if hand_cnt < self.max_hand_num:
+                    object_labels[hand_cnt] = heatmaps
+                    type_labels[hand_cnt] = [np.asarray(name_index)]
+                    hand_cnt += 1
+                    if hand_cnt == self.max_hand_num:
+                        break
+                else:
+                    break
+            break         
         
         letterbox_image = transforms.ToTensor()(letterbox_image)
-        landmarks = torch.tensor(np.array(landmarks), dtype=torch.float32)
-        gesture_type = torch.tensor(np.array(gesture_type), dtype=torch.float32)
-            
-        return letterbox_image, landmarks, gesture_type
+        object_labels = torch.tensor(np.array(object_labels), dtype=torch.float32)
+        type_labels = torch.tensor(np.array(type_labels), dtype=torch.float32)
+        
+        return letterbox_image, object_labels, type_labels
         
     def __len__(self):
         return len(self.images_path)

@@ -20,10 +20,11 @@ def letterbox(image, target_shape=(640, 640), fill_color=(72, 72, 72), is_mask=F
     dh /= 2
     
     if shape[::-1] != new_unpad:  # resize
-        image = cv2.resize(image, new_unpad, interpolation=cv2.INTER_LINEAR)
+        image = cv2.resize(image, new_unpad, interpolation=cv2.INTER_AREA)
     top_padding, bottom_padding = int(round(dh - 0.1)), int(round(dh + 0.1))
     left_padding, right_padding = int(round(dw - 0.1)), int(round(dw + 0.1))
     if is_mask:
+        # 如果是遮罩图像
         image = cv2.copyMakeBorder(
             image, 
             top_padding, 
@@ -34,6 +35,7 @@ def letterbox(image, target_shape=(640, 640), fill_color=(72, 72, 72), is_mask=F
         
         return image, scale_ratio, left_padding, top_padding
     else:
+        # 如果不是遮罩图像
         image = cv2.copyMakeBorder(
             image, 
             top_padding, 
