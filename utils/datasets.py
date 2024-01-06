@@ -45,6 +45,7 @@ class Datasets(torch.utils.data.Dataset):
         self.sigma_y = config['sigma_y']
         
         self.max_hand_num = config['max_hand_num']
+        # self.max_hand_num += 1
         
         print(f"names: {names}")
         
@@ -60,6 +61,7 @@ class Datasets(torch.utils.data.Dataset):
         self.images_path = images_path
         
     def __getitem__(self, index):
+        st = time()
         while True:
             # 图像的路径，图像及其标签的路径，类别索引
             image_path, label_path, name_index = self.images_path[index]
@@ -117,6 +119,7 @@ class Datasets(torch.utils.data.Dataset):
                     y = y if 0 <= y <= 1 else 1
                     heatmap = heatmaps[heatmaps_index]
                     heatmap[int(y*image_height-1)][int(x*image_width-1)] = 255
+                    heatmaps[heatmaps_index] = heatmap
                  
                 for heatmaps_index in range(len(heatmaps)):
                     # 对每一张 Heatmap 进行高斯模糊处理
@@ -142,7 +145,7 @@ class Datasets(torch.utils.data.Dataset):
                     # cv2.imshow("letterbox heatmap", letterbox_heatmap)
                     # cv2.waitKey(0)
                 
-                # 将 Heatmap 以及 该组 Heatmap 所属的类别存入 object_labels
+                # 将 Heatmap 以及 该组 Heatmap 所属的类别存入 o`bject_labels
                 # print(f"heatmaps: {heatmaps}")
                 # print(f"name_index: {name_index}")
                 
@@ -156,10 +159,12 @@ class Datasets(torch.utils.data.Dataset):
                     break
             break         
         
+        # print(f"object_labels length in datasets: {len(object_labels)}")
+        
         letterbox_image = transforms.ToTensor()(letterbox_image)
         object_labels = torch.tensor(np.array(object_labels), dtype=torch.float32)
         type_labels = torch.tensor(np.array(type_labels), dtype=torch.float32)
-        
+        # print(f"Dataset Upload Time: {time() - st}")
         return letterbox_image, object_labels, type_labels
         
     def __len__(self):

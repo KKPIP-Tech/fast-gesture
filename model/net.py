@@ -1,152 +1,138 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchsummary import summary
 
-class DoubleConv(nn.Module):
-    """(convolution => [BN] => ReLU) * 2"""
 
-    def __init__(self, in_channels, out_channels, mid_channels=None):
-        super().__init__()
-        if not mid_channels:
-            mid_channels = out_channels
-        self.double_conv = nn.Sequential(
-            nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1),
-            nn.BatchNorm2d(mid_channels),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True)
-        )
+class UNetBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, down=True, use_dropout=False):
+        super(UNetBlock, self).__init__()
+        if down:
+            self.block = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, 4, 2, 1, bias=False),
+                nn.BatchNorm2d(out_channels),
+                nn.ReLU()
+            )
+        else:
+            self.block = nn.Sequential(
+                nn.ConvTranspose2d(in_channels, out_channels // 2, 4, 2, 1, bias=False),
+                nn.BatchNorm2d(out_channels // 2),
+                nn.ReLU()
+            )
+
+        if use_dropout:
+            self.block = nn.Sequential(self.block, nn.Dropout(0.5))
 
     def forward(self, x):
-        return self.double_conv(x)
+        return self.block(x)
+
 
 class UNet(nn.Module):
     def __init__(self):
         super(UNet, self).__init__()
-        self.n_channels = 3
-        self.n_classes = 21  # 根据实际情况调整
-
-        self.inc = DoubleConv(self.n_channels, 64)
-        self.down1 = DoubleConv(64, 128)
-        self.down2 = DoubleConv(128, 256)
-        self.down3 = DoubleConv(256, 512)
-        self.down4 = DoubleConv(512, 1024)
-
-        self.up1 = nn.ConvTranspose2d(1024, 512, kernel_size=2, stride=2)
-        self.upconv1 = DoubleConv(1024, 512)
-        self.up2 = nn.ConvTranspose2d(512, 256, kernel_size=2, stride=2)
-        self.upconv2 = DoubleConv(512, 256)
-        self.up3 = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2)
-        self.upconv3 = DoubleConv(256, 128)
-        self.up4 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2)
-        self.upconv4 = DoubleConv(128, 64)
-
-        self.outc = nn.Conv2d(64, self.n_classes, kernel_size=1)
+        self.down1 = UNetBlock(3, 64, down=True, use_dropout=False)
+        self.down2 = UNetBlock(64, 128, down=True, use_dropout=False)
+        self.down3 = UNetBlock(128, 256, down=True, use_dropout=False)
+        self.down4 = UNetBlock(256, 512, down=True, use_dropout=True)
+        self.up1 = UNetBlock(512, 512, down=False, use_dropout=True)
+        self.up2 = UNetBlock(512, 256, down=False, use_dropout=False)
+        self.up3 = UNetBlock(256, 128, down=False, use_dropout=False)
+        self.final = nn.Conv2d(128, 21, kernel_size=1)
 
     def forward(self, x):
-        x1 = self.inc(x)
-        x2 = F.max_pool2d(x1, 2)
-        x2 = self.down1(x2)
-        x3 = F.max_pool2d(x2, 2)
-        x3 = self.down2(x3)
-        x4 = F.max_pool2d(x3, 2)
-        x4 = self.down3(x4)
-        x5 = F.max_pool2d(x4, 2)
-        x5 = self.down4(x5)
-
-        x = self.up1(x5)
-        x = torch.cat([x, x4], dim=1)
-        x = self.upconv1(x)
-
-        x = self.up2(x)
-        x = torch.cat([x, x3], dim=1)
-        x = self.upconv2(x)
-
-        x = self.up3(x)
-        x = torch.cat([x, x2], dim=1)
-        x = self.upconv3(x)
-
-        x = self.up4(x)
-        x = torch.cat([x, x1], dim=1)
-        x = self.upconv4(x)
-
-        logits = self.outc(x)
-        return logits
+        d1 = self.down1(x)
+        d2 = self.down2(d1)
+        d3 = self.down3(d2)
+        d4 = self.down4(d3)
+        u1 = self.up1(d4)
+        u2 = self.up2(torch.cat([u1, d3], 1))
+        u3 = self.up3(torch.cat([u2, d2], 1))
+        return self.final(torch.cat([u3, d1], 1))
 
 
-class MLP(nn.Module):
-    """
-    多层感知器，用于类别标签的分类任务。
-    """
-    def __init__(self, input_dim=1, hidden_dim=128, output_dim=21):  # 假设有21个手势类别
-        super(MLP, self).__init__()
-        self.fc1 = nn.Linear(input_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, output_dim)
+class MLPHead(nn.Module):
+    def __init__(self, input_dim, output_dim):
+        super(MLPHead, self).__init__()
+        self.fc = nn.Sequential(
+            nn.Linear(input_dim, 512),  # 调整输入维度以匹配UNet的输出
+            nn.ReLU(),
+            nn.Linear(512, output_dim)
+        )
 
     def forward(self, x):
-        # x shape: torch.Size([4, 1])
-        
-        x = F.relu(self.fc1(x))
-        x = self.fc2(x)
-        return x
+        return self.fc(x)
 
-class HandGestureNetwork(nn.Module):
-    def __init__(self, max_hand_num, num_keypoints=21, num_classes=20):
-        super(HandGestureNetwork, self).__init__()
+
+class HandGestureNet(nn.Module):
+    def __init__(self, max_hand_num):
+        super(HandGestureNet, self).__init__()
         self.max_hand_num = max_hand_num
         self.unet = UNet()
-        self.mlps = nn.ModuleList([MLP(1, 128, num_classes) for _ in range(max_hand_num)])
-        self.detector_heads = nn.ModuleList([DetectorHead(21 + num_keypoints, num_keypoints) for _ in range(max_hand_num)])  # 加入关键点信息
-
-    def forward(self, image, keypoints, class_labels):
-        feature_map = self.unet(image)
-        gesture_outputs = []
-        keypoint_outputs = []
-
-        for i in range(self.max_hand_num):
-            # 处理类别标签
-            class_label = class_labels[:, i, :].squeeze(-1)
-            class_label = class_label.view(-1, 1)  # 确保 class_label 是二维的，形状为 [batch_size, 1]
-            gesture_output = self.mlps[i](class_label.float())
-
-            # 将关键点信息与特征图结合
-            combined_feature_map = torch.cat((feature_map, keypoints[:, i, :, :, :]), dim=1)
-
-            # 使用检测头定位关键点
-            keypoint_output = self.detector_heads[i](combined_feature_map)
-
-            gesture_outputs.append(gesture_output)
-            keypoint_outputs.append(keypoint_output)
-
-        return gesture_outputs, keypoint_outputs
-
-
-
-class DetectorHead(nn.Module):
-    """检测头，用于定位关键点"""
-    
-    def __init__(self, in_channels, num_keypoints):
-        super(DetectorHead, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels, 128, kernel_size=3, padding=1)
-        self.relu = nn.ReLU()
-        self.conv2 = nn.Conv2d(128, num_keypoints, kernel_size=1)
+        self.unet_output_dim = 537600  # UNet输出的扁平化维度
+        self.mlp = MLPHead(self.unet_output_dim, max_hand_num)
+        # self.gesture_heads = nn.ModuleList([nn.Linear(1, 1) for _ in range(max_hand_num)])
+        # 调整关键点检测头的输入维度为整个gesture_logits的输出
+        self.keypoint_heads = nn.ModuleList([nn.Linear(max_hand_num, 3) for _ in range(1 * 21)])
 
     def forward(self, x):
-        x = self.conv1(x)
-        x = self.relu(x)
-        x = self.conv2(x)
-        return x
+        # size: 640
+        # x shape: [batch_size, image_channel, size, size]
+        # print(f"input shape: {x.shape}")
+        tensor_19 = torch.tensor(19, device='cuda') 
+        outputs = []
+        for one_batch in x:
+            
+            one_batch = one_batch.unsqueeze(0)
+            # print(f"one_batch: {one_batch.shape}")
+            features = self.unet(one_batch)  # [batch_size, keypoints_number, size/2, size/2]
+            # print(f"feature shape: {features.shape}")
+            flat_features = features.view(features.size(0), -1)
+            gesture_logits = self.mlp(flat_features)
 
+            # 获取手势分类的概率分布
+            gesture_probs = F.softmax(gesture_logits, dim=1)
+            # 选择概率最高的类别作为预测结果
+            gesture_values = torch.argmax(gesture_probs, dim=1)
+
+
+            # 关键点检测头处理
+            keypoints = [head(gesture_logits) for head in self.keypoint_heads]
+            
+            # print(f"Keypoints: \n{keypoints}")
+            
+            # print(f"Gesture Values Length: {gesture_values.shape}")
+
+            one_batch_outputs = []
+            for i in range(self.max_hand_num):
+                hand_data = []
+                for kp in keypoints:
+                    # 确保关键点头输出的张量尺寸正确
+                    if kp.shape[0] > i:  # 确保索引 i 在张量的第一个维度范围内
+                        hand_data.append(
+                            [(kp[i][0].item() + 1)/2, 
+                             (kp[i][1].item() + 1)/2]
+                            )
+                    else:
+                        hand_data.append([0.0, 0.0])  # 如果索引超出范围，用None填充
+                gesture_value = gesture_values[i] if i < len(gesture_values) else tensor_19
+                # print("hand_data: ", len(hand_data))
+                one_batch_outputs.append([gesture_value, hand_data])
+
+            outputs.append(one_batch_outputs)
+        
+        # print(f"OutPut Length: {len(outputs)}")
+        # 
+        return outputs
+
+    
 if __name__ == "__main__":
-    # 网络实例化和使用示例
-    max_hand_num = 5  # 假设最大手部数量为5
-    net = HandGestureNetwork(max_hand_num)
+    # 实例化网络
+    max_hand_num = 5  # 可以根据实际需求调整
+    net = HandGestureNet(max_hand_num)
 
-    # 示例输入
-    image = torch.rand(1, 3, 256, 256)  # 假设的原图
-    keypoints = torch.rand(1, max_hand_num, 21, 256, 256)  # 假设的关键点标签
-    class_labels = torch.randint(0, 20, (1, max_hand_num, 1))  # 假设的类别标签
+    # 设置设备
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    net = net.to(device)
 
-    # 前向传播
-    gesture_outputs, keypoint_outputs = net(image, keypoints, class_labels)
+    # 打印网络摘要
+    summary(net, input_size=(3, 256, 256), batch_size=8)

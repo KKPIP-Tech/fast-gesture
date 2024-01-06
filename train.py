@@ -1,5 +1,6 @@
 import os
 import cv2
+import numpy as np
 from time import time, sleep
 import argparse
 
@@ -10,7 +11,7 @@ from torch.utils.data import DataLoader
 import torch.nn.functional as F
 from tqdm import tqdm
 
-from model.net import HandGestureNetwork
+from model.net import HandGestureNet
 from utils.datasets import Datasets
 
 torch.cuda.empty_cache()
@@ -28,6 +29,16 @@ def create_path(path):
             os.makedirs(new_path)
             return new_path
         suffix += 1
+
+def create_gaussian_kernel(size=15, sigma=5):
+    # 生成一个高斯核
+    m, n = [(ss - 1.) / 2. for ss in (size, size)]
+    y, x = torch.meshgrid(torch.arange(-m, m+1), torch.arange(-n, n+1), indexing='xy')
+    h = torch.exp(-(x*x + y*y) / (2*sigma*sigma))
+    h[h < torch.finfo(h.dtype).eps * h.max()] = 0
+    return h / h.sum()
+     
+
 
 def train(opt, save_path):
     data_json = opt.data
@@ -47,25 +58,26 @@ def train(opt, save_path):
         shuffle=opt.shuffle
     )
     
-    # 参数设置
-    max_hand_num = 10
-    num_epochs = 10  # 训练轮数
-    learning_rate = 0.000001  # 学习率
-
     # 初始化网络
-    net = HandGestureNetwork(max_hand_num)
+    max_hand_num = 5
+    net = HandGestureNet(max_hand_num=max_hand_num)
+    net.to(device=device)
+
+    # 损失函数
+    keypoints_loss = nn.MSELoss().to(device=device)
+    gestures_loss = nn.MSELoss().to(device=device)
     
-    # 定义损失函数和优化器
-    criterion = torch.nn.MSELoss()  # 可以根据需要选择适当的损失函数
-    criterion.to(device=device)
-    optimizer = optim.SGD(net.parameters(), lr=learning_rate)
+    # 优化器
+    optimizer = optim.SGD(net.parameters(), lr=opt.lr)
+
+    zero_image = np.zeros((opt.img_size, opt.img_size))
+    gaussian_kernel = create_gaussian_kernel().to(device).view(1, 1, 15, 15)
 
     for epoch in range(opt.epochs):
         # model.train()
         total_loss = 0.0
         min_loss = 100000
         max_loss = 10
-        running_loss = 0.0
         net.train()  # 设置为训练模式
         pbar = tqdm(dataloader, desc=f"Epoch {epoch}", unit=" batches")
         for index, datapack in enumerate(pbar):
@@ -76,25 +88,52 @@ def train(opt, save_path):
             # 第二是一组关键点标签，尺寸如下 torch.Size([1, max_hand_num, 21, 256, 256])；
             # 第三是一组类别标签，尺寸如下 torch.Size([1, max_hand_num, 1])；
             
+            images = images.to(device)
+            keypoint_labels = keypoints.to(device)
+            class_labels = class_labels.to(device)
+            # print(f"keypoint_labels length: {len(keypoint_labels)}")
+            
+            # 前向传播
+            st = time()
+            forward = net(images)
+            
+            
+            loss = 0.0
+            
+            # print(f"Output Length: {len(forward)}")
+            
+            for one_batch in zip(forward, keypoint_labels, class_labels):
+                
+                output_batch, keypoint_label_batch, gesture_label_batch = one_batch
+                
+                # print(len(keypoint_label_batch))
+
+                pred_gesture_value = [keypoints_value[0] for keypoints_value in output_batch]
+                pred_keypoints = [keypoints_value[1] for keypoints_value in output_batch]
+            
+                # print(f"pred_gesture_value: \n{len(pred_gesture_value)}")
+                # print(f"pred_keypoints: \n{len(pred_keypoints)}")
+                # print()
+                
+                for gesture_value_detect, keypoints_detect, heatmaps, gestures in zip(pred_gesture_value, pred_keypoints, keypoint_label_batch, gesture_label_batch):
+                    # 创建一个空的张量来存储热图
+                    output_heatmaps = torch.zeros((21, opt.img_size, opt.img_size), device=device)
+
+                    for idx, point in enumerate(keypoints_detect):
+                        # 在 GPU 上直接生成高斯热图
+                        y, x = int(point[1] * opt.img_size), int(point[0] * opt.img_size)
+                        if x < opt.img_size and y < opt.img_size:
+                            output_heatmaps[idx, y, x] = 1
+                            output_heatmaps[idx] = output_heatmaps[idx].unsqueeze(0)
+                            output_heatmaps[idx] = F.conv2d(output_heatmaps[idx].unsqueeze(0), gaussian_kernel, padding=7).squeeze(0)
+                    tensor_gestures_pred = torch.tensor([gesture_value_detect], dtype=torch.float32, requires_grad=True,device=device)
+                    loss += keypoints_loss(output_heatmaps, heatmaps.to(device)) 
+                    loss += gestures_loss(tensor_gestures_pred, gestures.to(device))
+
+            # print(f"Net Time: {time() -st}")
             # 梯度清零
             optimizer.zero_grad()
-
-            # 前向传播 + 反向传播 + 优化
-            gesture_outputs, keypoint_outputs = net(images, keypoints, class_labels)
-            
-            # 计算损失
-            loss = 0
-            # 在计算损失时
-            for j in range(max_hand_num):
-                # 转换 class_labels 为 one-hot 编码以匹配 gesture_outputs 的形状
-                one_hot_labels = F.one_hot(class_labels[:, j].to(torch.int64), num_classes=20)
-                
-                # 确保 one_hot_labels 和 gesture_outputs 的形状相同
-                one_hot_labels = one_hot_labels.to(torch.float32).view(gesture_outputs[j].shape)
-                
-                loss += criterion(gesture_outputs[j], one_hot_labels)
-                loss += criterion(keypoint_outputs[j], keypoints[:, j, :, :, :])
-
+            # 反向传播和优化
             loss.backward()
             optimizer.step()
 
@@ -108,10 +147,10 @@ def train(opt, save_path):
             
             avg_loss = total_loss / (index+1)
             
-            print(f"loss item: {loss.item()}")
-            # if i % 10 == 9:  # 每10个batch打印一次
-            print(f"[{epoch + 1}] avg_loss: {avg_loss}")
-            # torch.save(net.state_dict(), os.path.join(model_save_path, f'model_epoch_{epoch}.pth'))
+        print(f"loss item: {loss.item()}")
+        # if i % 10 == 9:  # 每10个batch打印一次
+        print(f"[{epoch + 1}] avg_loss: {avg_loss}")
+        torch.save(net, os.path.join("./", f'model_epoch_{epoch}.pth'))
 
 
     print('Finished Training')
@@ -125,13 +164,13 @@ def run(opt):
 
 if __name__ == "__main__":
     parse = argparse.ArgumentParser()
-    parse.add_argument('--device', type=str, default='cpu', help='cuda or cpu')
-    parse.add_argument('--batch_size', type=int, default=1, help='batch size')
-    parse.add_argument('--img_size', type=int, default=256, help='trian img size')
+    parse.add_argument('--device', type=str, default='cuda', help='cuda or cpu')
+    parse.add_argument('--batch_size', type=int, default=4, help='batch size')
+    parse.add_argument('--img_size', type=int, default=320, help='trian img size')
     parse.add_argument('--epochs', type=int, default=300, help='max train epoch')
     parse.add_argument('--data', type=str,default='./data', help='datasets config path')
     parse.add_argument('--save_period', type=int, default=4, help='save per n epoch')
-    parse.add_argument('--workers', type=int, default=16, help='thread num to load data')
+    parse.add_argument('--workers', type=int, default=6, help='thread num to load data')
     parse.add_argument('--shuffle', action='store_false', help='chose to unable shuffle in Dataloader')
     parse.add_argument('--save_path', type=str, default='./run/train/')
     parse.add_argument('--save_name', type=str, default='exp')
