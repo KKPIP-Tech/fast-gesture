@@ -50,7 +50,7 @@ def train(opt, save_path):
     print(f"Device: {device}")
 
     # set datasets
-    datasets = Datasets(dataset_conf=data_json, img_size=opt.img_size)
+    datasets = Datasets(dataset_conf=data_json, img_size=opt.img_size, device=device)
     dataloader = DataLoader(
         dataset=datasets,
         batch_size=opt.batch_size,
@@ -165,7 +165,7 @@ def run(opt):
 if __name__ == "__main__":
     parse = argparse.ArgumentParser()
     parse.add_argument('--device', type=str, default='cuda', help='cuda or cpu')
-    parse.add_argument('--batch_size', type=int, default=4, help='batch size')
+    parse.add_argument('--batch_size', type=int, default=8, help='batch size')
     parse.add_argument('--img_size', type=int, default=320, help='trian img size')
     parse.add_argument('--epochs', type=int, default=300, help='max train epoch')
     parse.add_argument('--data', type=str,default='./data', help='datasets config path')
