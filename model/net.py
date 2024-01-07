@@ -78,7 +78,7 @@ class HandGestureNet(nn.Module):
         # size: 640
         # x shape: [batch_size, image_channel, size, size]
         # print(f"input shape: {x.shape}")
-        tensor_19 = torch.tensor(19, device='cuda') 
+        tensor_19 = torch.tensor(19, device='cpu') 
         outputs = []
         for one_batch in x:
             
@@ -109,8 +109,8 @@ class HandGestureNet(nn.Module):
                     # 确保关键点头输出的张量尺寸正确
                     if kp.shape[0] > i:  # 确保索引 i 在张量的第一个维度范围内
                         hand_data.append(
-                            [(kp[i][0].item() + 1)/2, 
-                             (kp[i][1].item() + 1)/2]
+                            [(kp[i][0].item() + 1)/2,  # 限制在 [0, 1] 区间之内
+                             (kp[i][1].item() + 1)/2]  # 限制在 [0, 1] 区间之内
                             )
                     else:
                         hand_data.append([0.0, 0.0])  # 如果索引超出范围，用None填充

@@ -51,7 +51,7 @@ def train(opt, save_path):
     print(f"Device: {device}")
 
     # set datasets
-    datasets = Datasets(dataset_conf=data_json, img_size=opt.img_size, device=device)
+    datasets = Datasets(dataset_conf=data_json, img_size=opt.img_size)
     dataloader = DataLoader(
         dataset=datasets,
         batch_size=opt.batch_size,
@@ -177,7 +177,7 @@ if __name__ == "__main__":
     parse.add_argument('--shuffle', action='store_false', help='chose to unable shuffle in Dataloader')
     parse.add_argument('--save_path', type=str, default='./run/train/')
     parse.add_argument('--save_name', type=str, default='exp')
-    parse.add_argument('--lr', type=float, default=0.0001)
+    parse.add_argument('--lr', type=float, default=0.01)
     parse.add_argument('--optimizer', type=str, default='Adam', help='only support: [Adam, SGD]')
     parse.add_argument('--loss', type=str, default='MSELoss', help='[MSELoss]')
     parse.add_argument('--resume', action='store_true')
