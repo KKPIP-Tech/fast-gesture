@@ -42,6 +42,7 @@ def create_gaussian_kernel(size=15, sigma=5):
 
 def train(opt, save_path):
     data_json = opt.data
+    print(f"save_path: {save_path}")
     print(f"Datasets Config File Root Path: {data_json}")
     log_file = save_path + "/record.log"
     
@@ -78,8 +79,9 @@ def train(opt, save_path):
         total_loss = 0.0
         min_loss = 100000
         max_loss = 10
+        avg_loss = 0.0
         net.train()  # 设置为训练模式
-        pbar = tqdm(dataloader, desc=f"Epoch {epoch}", unit=" batches")
+        pbar = tqdm(dataloader, desc=f"[Epoch {epoch} ->]")
         for index, datapack in enumerate(pbar):
             
             # 获取输入数据
@@ -147,11 +149,12 @@ def train(opt, save_path):
             
             avg_loss = total_loss / (index+1)
             
-        print(f"loss item: {loss.item()}")
+            pbar.set_description(f"[Epoch {epoch}|avg_loss {avg_loss:.4f}->]")
+            
+        # print(f"loss item: {loss.item()}")
         # if i % 10 == 9:  # 每10个batch打印一次
-        print(f"[{epoch + 1}] avg_loss: {avg_loss}")
-        torch.save(net, os.path.join("./", f'model_epoch_{epoch}.pth'))
-
+        print(f"[{epoch + 1}] | -> avg_loss {avg_loss:.4f}, min_loss {min_loss:.4f}, max_loss {max_loss:.4f}")
+        torch.save(net, save_path + f'/model_epoch_{epoch}.pth')
 
     print('Finished Training')
 
