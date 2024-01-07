@@ -17,7 +17,7 @@ net.eval()
 
 names = ["one", "two", "five", "hold", "pickup"]
 
-capture = cv2.VideoCapture(0)
+capture = cv2.VideoCapture(1)
 
 while True:
 # 读取图像并进行预处理
@@ -39,8 +39,10 @@ while True:
     for output in outputs[0]:
         print(output)
         gesture_value, keypoints = output
-        gesture_label = gesture_value  # 假设有一个类别标签列表
-        gesture_label = str(gesture_label)
+        gesture_label = gesture_value.item()  # 假设有一个类别标签列表
+        if gesture_label > len(names):
+            continue
+        gesture_label = names[gesture_label]
         # 绘制关键点
         for x, y in keypoints:
             x, y = int(x * 256), int(y * 256)  # 将坐标转换回原图尺寸
