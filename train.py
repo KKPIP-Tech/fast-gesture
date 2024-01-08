@@ -47,7 +47,7 @@ def train(opt, save_path):
     log_file = save_path + "/record.log"
     
     # set device
-    device = opt.device if torch.cuda.is_available() else 'cpu'
+    device = opt.device if torch.cuda.is_available() else 'mps'
     print(f"Device: {device}")
 
     # set datasets
@@ -66,10 +66,10 @@ def train(opt, save_path):
 
     # 损失函数
     keypoints_loss = nn.MSELoss().to(device=device)
-    gestures_loss = nn.MSELoss().to(device=device)
+    gestures_loss = nn.CrossEntropyLoss().to(device=device)
     
     # 优化器
-    optimizer = optim.SGD(net.parameters(), lr=opt.lr)
+    optimizer = optim.Adam(net.parameters(), lr=opt.lr)
 
     zero_image = np.zeros((opt.img_size, opt.img_size))
     gaussian_kernel = create_gaussian_kernel().to(device).view(1, 1, 15, 15)
@@ -100,7 +100,8 @@ def train(opt, save_path):
             forward = net(images)
             
             
-            loss = 0.0
+            k_loss = 0.0
+            g_loss = 0.0
             
             # print(f"Output Length: {len(forward)}")
             
@@ -119,33 +120,36 @@ def train(opt, save_path):
                 
                 for gesture_value_detect, keypoints_detect, heatmaps, gestures in zip(pred_gesture_value, pred_keypoints, keypoint_label_batch, gesture_label_batch):
                     # 创建一个空的张量来存储热图
-                    output_heatmaps = torch.zeros((21, opt.img_size, opt.img_size), device=device)
+                    # output_heatmaps = torch.zeros((21, opt.img_size, opt.img_size), device=device)
 
-                    for idx, point in enumerate(keypoints_detect):
-                        # 在 GPU 上直接生成高斯热图
-                        y, x = int(point[1] * opt.img_size), int(point[0] * opt.img_size)
-                        if x < opt.img_size and y < opt.img_size:
-                            output_heatmaps[idx, y, x] = 1
-                            output_heatmaps[idx] = output_heatmaps[idx].unsqueeze(0)
-                            output_heatmaps[idx] = F.conv2d(output_heatmaps[idx].unsqueeze(0), gaussian_kernel, padding=7).squeeze(0)
+                    # for idx, point in enumerate(keypoints_detect):
+                    #     # 在 GPU 上直接生成高斯热图
+                    #     y, x = int(point[1] * opt.img_size), int(point[0] * opt.img_size)
+                    #     if x < opt.img_size and y < opt.img_size:
+                    #         output_heatmaps[idx, y, x] = 1
+                    #         output_heatmaps[idx] = output_heatmaps[idx].unsqueeze(0)
+                    #         output_heatmaps[idx] = F.conv2d(output_heatmaps[idx].unsqueeze(0), gaussian_kernel, padding=7).squeeze(0)
+                    tensor_keypoints_detect = torch.tensor(keypoints_detect, dtype=torch.float32, requires_grad=True,device=device)
                     tensor_gestures_pred = torch.tensor([gesture_value_detect], dtype=torch.float32, requires_grad=True,device=device)
-                    loss += keypoints_loss(output_heatmaps, heatmaps.to(device)) 
-                    loss += gestures_loss(tensor_gestures_pred, gestures.to(device))
+                    k_loss += keypoints_loss(tensor_keypoints_detect, heatmaps.to(device)) 
+                    g_loss += gestures_loss(tensor_gestures_pred, gestures.to(device))
 
             # print(f"Net Time: {time() -st}")
             # 梯度清零
             optimizer.zero_grad()
             # 反向传播和优化
-            loss.backward()
+            k_loss.backward()
+            g_loss.backward()
             optimizer.step()
 
             # 打印统计信息
-            total_loss += loss.item()
+            total_loss += k_loss.item()
+            total_loss += g_loss.item()
             
-            if loss < min_loss:
-                min_loss = loss
-            if loss > max_loss:
-                max_loss = loss
+            if total_loss < min_loss:
+                min_loss = total_loss
+            if total_loss > max_loss:
+                max_loss = total_loss
             
             avg_loss = total_loss / (index+1)
             
@@ -173,11 +177,11 @@ if __name__ == "__main__":
     parse.add_argument('--epochs', type=int, default=300, help='max train epoch')
     parse.add_argument('--data', type=str,default='./data', help='datasets config path')
     parse.add_argument('--save_period', type=int, default=4, help='save per n epoch')
-    parse.add_argument('--workers', type=int, default=6, help='thread num to load data')
+    parse.add_argument('--workers', type=int, default=16, help='thread num to load data')
     parse.add_argument('--shuffle', action='store_false', help='chose to unable shuffle in Dataloader')
     parse.add_argument('--save_path', type=str, default='./run/train/')
     parse.add_argument('--save_name', type=str, default='exp')
-    parse.add_argument('--lr', type=float, default=0.01)
+    parse.add_argument('--lr', type=float, default=0.001)
     parse.add_argument('--optimizer', type=str, default='Adam', help='only support: [Adam, SGD]')
     parse.add_argument('--loss', type=str, default='MSELoss', help='[MSELoss]')
     parse.add_argument('--resume', action='store_true')

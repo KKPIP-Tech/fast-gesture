@@ -69,11 +69,11 @@ class Datasets(torch.utils.data.Dataset):
             # 图像处理 --------------
             original_image = cv2.imread(image_path)
             image_height, image_width = original_image.shape[:2]
-            letterbox_image = letterbox(
+            letterbox_image, scale_ratio, left_padding, top_padding = letterbox(
                 image=original_image,
                 target_shape=[self.height, self.width],
                 fill_color=(114, 114, 114)
-            )[0]
+            )
             
             # cv2.imshow("letterbox image", letterbox_image)
             
@@ -97,13 +97,17 @@ class Datasets(torch.utils.data.Dataset):
             zero_image = np.zeros((image_height, image_width))
             
             # 按照手的最大数量填充 object_labels 和 type_labels 以确保在多 Workers 和多 Batch Size 时不会出现尺寸错误的问题
-            object_labels = [[np.zeros((self.height, self.width)) for _ in range(self.kc)] for _ in range(self.max_hand_num)]  # 每个手的关键点及手势类别数据为一个元素
+            # object_labels = [[np.zeros((self.height, self.width)) for _ in range(self.kc)] for _ in range(self.max_hand_num)]  # 每个手的关键点及手势类别数据为一个元素
+            
+            object_labels = [[np.asarray([0.0, 0.0]).copy() for _ in range(self.kc)] for _ in range(self.max_hand_num)]
             type_labels = [[np.asarray(19)] for _ in range(self.max_hand_num)]  # 其索引值对应 object_labels 当中的元素位置，用于存储对应手的手势类别
             
             hand_cnt = 0
             for one_hand_data in json_data:
                 # 处理单个手的数据
                 heatmaps = [zero_image.copy() for _ in range(self.kc)]  # 跟据关键点的总数生成对应数量的 heatmap
+                
+                keypoint_label = [np.asarray([0.0, 0.0]).copy() for _ in range(self.kc)]
                 
                 # # Left: 0; Right: 1
                 # hand_label = 0 if one_hand_data['hand_label'] == "Left" else 1 
@@ -117,15 +121,21 @@ class Datasets(torch.utils.data.Dataset):
                     x = x if 0 <= x <= 1 else 1
                     y = float(keypoint['y'])
                     y = y if 0 <= y <= 1 else 1
-                    heatmap = heatmaps[heatmaps_index]
-                    heatmap[int(y*image_height-1)][int(x*image_width-1)] = 255
-                    letterbox_heatmap = letterbox(
-                        image=heatmap,
-                        target_shape=[self.height, self.width],
-                        fill_color=0,
-                        is_mask=True
-                    )[0]
-                    heatmaps[heatmaps_index] = letterbox_heatmap
+                    
+                    keypoint_label[heatmaps_index] = np.asarray([
+                        float((x*self.width-1+left_padding)/self.width),
+                        float((y*self.height-1+top_padding)/self.height)
+                    ])
+                    
+                    # heatmap = heatmaps[heatmaps_index]
+                    # heatmap[int(y*image_height-1)][int(x*image_width-1)] = 255
+                    # letterbox_heatmap = letterbox(
+                    #     image=heatmap,
+                    #     target_shape=[self.height, self.width],
+                    #     fill_color=0,
+                    #     is_mask=True
+                    # )[0]
+                    # heatmaps[heatmaps_index] = letterbox_heatmap
                  
                 # for heatmaps_index in range(len(heatmaps)):
                 #     # 对每一张 Heatmap 进行高斯模糊处理
@@ -156,7 +166,7 @@ class Datasets(torch.utils.data.Dataset):
                 # print(f"name_index: {name_index}")
                 
                 if hand_cnt < self.max_hand_num:
-                    object_labels[hand_cnt] = heatmaps
+                    object_labels[hand_cnt] = keypoint_label
                     type_labels[hand_cnt] = [np.asarray(name_index)]
                     hand_cnt += 1
                     if hand_cnt == self.max_hand_num:
