@@ -53,11 +53,15 @@ class Datasets(torch.utils.data.Dataset):
         for name in names:
             search_images_path = datasets_root + '/' + name + '/images/'
             search_labels_path = datasets_root + '/' + name + '/labels/'
+            cnt = 0
             for datapack in os.walk(search_images_path):
                 for filename in datapack[2]:
                     image_path = search_images_path + filename
                     label_path = search_labels_path + filename.replace(".jpg", ".json")
                     images_path.append([image_path, label_path, names.index(name)])
+                    # cnt += 1
+                    # if cnt == 20:
+                    #     break
         self.images_path = images_path
         
     def __getitem__(self, index):
@@ -127,43 +131,7 @@ class Datasets(torch.utils.data.Dataset):
                         float((y*self.height-1+top_padding)/self.height)
                     ])
                     
-                    # heatmap = heatmaps[heatmaps_index]
-                    # heatmap[int(y*image_height-1)][int(x*image_width-1)] = 255
-                    # letterbox_heatmap = letterbox(
-                    #     image=heatmap,
-                    #     target_shape=[self.height, self.width],
-                    #     fill_color=0,
-                    #     is_mask=True
-                    # )[0]
-                    # heatmaps[heatmaps_index] = letterbox_heatmap
-                 
-                # for heatmaps_index in range(len(heatmaps)):
-                #     # 对每一张 Heatmap 进行高斯模糊处理
-                #     heatmap = heatmaps[heatmaps_index]
-                #     heatmap = cv2.GaussianBlur(heatmap, 
-                #                        self.kernel_size, 
-                #                        self.sigma_x, 
-                #                        self.sigma_y)
-                #     heatmap_amax = np.amax(heatmap)
-                #     if heatmap_amax != 0:
-                #         heatmap /= heatmap_amax / 255
-                #     heatmap /= 255.0
-                    
-                #     letterbox_heatmap = letterbox(
-                #         image=heatmap,
-                #         target_shape=[self.height, self.width],
-                #         fill_color=0,
-                #         is_mask=True
-                #     )[0]
-                    
-                #     heatmaps[heatmaps_index] = letterbox_heatmap
-                    
-                    # cv2.imshow("letterbox heatmap", letterbox_heatmap)
-                    # cv2.waitKey(0)
-                
-                # 将 Heatmap 以及 该组 Heatmap 所属的类别存入 o`bject_labels
-                # print(f"heatmaps: {heatmaps}")
-                # print(f"name_index: {name_index}")
+
                 
                 if hand_cnt < self.max_hand_num:
                     object_labels[hand_cnt] = keypoint_label

@@ -61,18 +61,15 @@ def train(opt, save_path):
     
     # 初始化网络
     max_hand_num = 5
-    net = HandGestureNet(max_hand_num=max_hand_num)
+    net = HandGestureNet(max_hand_num=max_hand_num, device=device)
     net.to(device=device)
 
     # 损失函数
-    keypoints_loss = nn.MSELoss().to(device=device)
+    keypoints_loss = nn.CrossEntropyLoss().to(device=device)
     gestures_loss = nn.CrossEntropyLoss().to(device=device)
     
     # 优化器
     optimizer = optim.Adam(net.parameters(), lr=opt.lr)
-
-    zero_image = np.zeros((opt.img_size, opt.img_size))
-    gaussian_kernel = create_gaussian_kernel().to(device).view(1, 1, 15, 15)
 
     for epoch in range(opt.epochs):
         # model.train()
@@ -83,75 +80,38 @@ def train(opt, save_path):
         net.train()  # 设置为训练模式
         pbar = tqdm(dataloader, desc=f"[Epoch {epoch} ->]")
         for index, datapack in enumerate(pbar):
-            
-            # 获取输入数据
             images, keypoints, class_labels = datapack
-            # 第一是一张原图，尺寸如下 torch.Size([1, 3, 256, 256])；
-            # 第二是一组关键点标签，尺寸如下 torch.Size([1, max_hand_num, 21, 256, 256])；
-            # 第三是一组类别标签，尺寸如下 torch.Size([1, max_hand_num, 1])；
-            
             images = images.to(device)
-            keypoint_labels = keypoints.to(device)
+            keypoints_label = keypoints.to(device)
             class_labels = class_labels.to(device)
-            # print(f"keypoint_labels length: {len(keypoint_labels)}")
-            
-            # 前向传播
-            st = time()
-            forward = net(images)
-            
-            
-            k_loss = 0.0
-            g_loss = 0.0
-            
-            # print(f"Output Length: {len(forward)}")
-            
-            for one_batch in zip(forward, keypoint_labels, class_labels):
-                
-                output_batch, keypoint_label_batch, gesture_label_batch = one_batch
-                
-                # print(len(keypoint_label_batch))
 
-                pred_gesture_value = [keypoints_value[0] for keypoints_value in output_batch]
-                pred_keypoints = [keypoints_value[1] for keypoints_value in output_batch]
-            
-                # print(f"pred_gesture_value: \n{len(pred_gesture_value)}")
-                # print(f"pred_keypoints: \n{len(pred_keypoints)}")
-                # print()
-                
-                for gesture_value_detect, keypoints_detect, heatmaps, gestures in zip(pred_gesture_value, pred_keypoints, keypoint_label_batch, gesture_label_batch):
-                    # 创建一个空的张量来存储热图
-                    # output_heatmaps = torch.zeros((21, opt.img_size, opt.img_size), device=device)
-
-                    # for idx, point in enumerate(keypoints_detect):
-                    #     # 在 GPU 上直接生成高斯热图
-                    #     y, x = int(point[1] * opt.img_size), int(point[0] * opt.img_size)
-                    #     if x < opt.img_size and y < opt.img_size:
-                    #         output_heatmaps[idx, y, x] = 1
-                    #         output_heatmaps[idx] = output_heatmaps[idx].unsqueeze(0)
-                    #         output_heatmaps[idx] = F.conv2d(output_heatmaps[idx].unsqueeze(0), gaussian_kernel, padding=7).squeeze(0)
-                    tensor_keypoints_detect = torch.tensor(keypoints_detect, dtype=torch.float32, requires_grad=True,device=device)
-                    tensor_gestures_pred = torch.tensor([gesture_value_detect], dtype=torch.float32, requires_grad=True,device=device)
-                    k_loss += keypoints_loss(tensor_keypoints_detect, heatmaps.to(device)) 
-                    g_loss += gestures_loss(tensor_gestures_pred, gestures.to(device))
-
-            # print(f"Net Time: {time() -st}")
-            # 梯度清零
             optimizer.zero_grad()
-            # 反向传播和优化
-            k_loss.backward()
-            g_loss.backward()
+            gesture_values, keypoints_outputs = net(images)
+
+            # 修正损失计算
+            loss = 0.0
+
+            # class_labels shape: [batch_size, max_hand_num, 1]
+            # keypoints_label shape: [batch_size, max_hand_num, kc, 2]
+            
+            # 手势识别损失
+            # class_labels = class_labels.view(-1)  # 将手势标签扁平化
+            # print(f"keypoints_label shape: {keypoints_label.shape}")
+            # gesture_values = gesture_values.view(-1, gesture_values.size(-1))  # 调整形状以匹配标签
+            loss += gestures_loss(gesture_values, class_labels)
+
+            # 关键点检测损失
+            # keypoints_label = keypoints_label.view(-1, keypoints_label.shape[-3], keypoints_label.shape[-2], keypoints_label.shape[-1])  # 调整关键点标签的形状
+            # keypoints_outputs = keypoints_outputs.view(-1, keypoints_outputs.shape[-2], keypoints_outputs.shape[-1])  # 确保输出形状正确
+            loss += keypoints_loss(keypoints_outputs, keypoints_label)
+
+            loss.backward()
             optimizer.step()
 
-            # 打印统计信息
-            total_loss += k_loss.item()
-            total_loss += g_loss.item()
-            
-            if total_loss < min_loss:
-                min_loss = total_loss
-            if total_loss > max_loss:
-                max_loss = total_loss
-            
-            avg_loss = total_loss / (index+1)
+            total_loss += loss.item()
+            min_loss = min(min_loss, total_loss)
+            max_loss = max(max_loss, total_loss)
+            avg_loss = total_loss / (index + 1)
             
             pbar.set_description(f"[Epoch {epoch}|avg_loss {avg_loss:.4f}->]")
             
@@ -181,7 +141,7 @@ if __name__ == "__main__":
     parse.add_argument('--shuffle', action='store_false', help='chose to unable shuffle in Dataloader')
     parse.add_argument('--save_path', type=str, default='./run/train/')
     parse.add_argument('--save_name', type=str, default='exp')
-    parse.add_argument('--lr', type=float, default=0.001)
+    parse.add_argument('--lr', type=float, default=0.00001)
     parse.add_argument('--optimizer', type=str, default='Adam', help='only support: [Adam, SGD]')
     parse.add_argument('--loss', type=str, default='MSELoss', help='[MSELoss]')
     parse.add_argument('--resume', action='store_true')

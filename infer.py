@@ -5,44 +5,47 @@ import numpy as np
 from time import time
 from model.net import HandGestureNet
 
-device = "cpu" if torch.cuda.is_available() else "cpu"
+device = "cpu" if torch.cuda.is_available() else "mps"
 
 # 加载模型
-net = HandGestureNet(max_hand_num=5)
+net = HandGestureNet(max_hand_num=5, device=device)
 # 加载模型
 # net = HandGestureNet(max_hand_num=您的最大手部数量)  # 创建模型实例
-net = torch.load("run/train/exp/model_epoch_4.pth")  # 加载模型文件
+net = torch.load("run/train/exp_7/model_epoch_7.pth")  # 加载模型文件
 net.to(device)
 net.eval()
 
 names = ["one", "two", "five", "hold", "pickup"]
 
-capture = cv2.VideoCapture(1)
+capture = cv2.VideoCapture(0)
 
 while True:
 # 读取图像并进行预处理
     st = time()
-    ret, frame = capture.read()
+    ret, image = capture.read()
     if not ret:
         continue
     # image = cv2.imread("101.jpg")
-    image = cv2.resize(frame, (320, 320))  # 假设模型输入为256x256
+    image = cv2.resize(image, (320, 320))  # 假设模型输入为256x256
     image_tensor = transforms.ToTensor()(image).unsqueeze(0).to(device)
 
     # 推理
     with torch.no_grad():
         outputs = net(image_tensor)
 
-    print(len(outputs[0]))
+    # print(len(outputs[0]))
+    class_labels, keypoints = outputs
     
     # 处理输出并在图像上绘制结果
-    for output in outputs[0]:
+    for output in zip(class_labels[0], keypoints[0]):
         print(output)
         gesture_value, keypoints = output
         gesture_label = gesture_value.item()  # 假设有一个类别标签列表
-        if gesture_label > len(names):
-            continue
-        gesture_label = names[gesture_label]
+        # if gesture_label > len(names):
+        #     continue
+        gesture_label = str(gesture_label)  # names[gesture_label]
+        keypoints = keypoints.cpu().detach().numpy() 
+        
         # 绘制关键点
         for x, y in keypoints:
             x, y = int(x * 256), int(y * 256)  # 将坐标转换回原图尺寸
