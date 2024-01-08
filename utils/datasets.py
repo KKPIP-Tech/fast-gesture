@@ -125,10 +125,16 @@ class Datasets(torch.utils.data.Dataset):
                     x = x if 0 <= x <= 1 else 1
                     y = float(keypoint['y'])
                     y = y if 0 <= y <= 1 else 1
+                    float_x = x*self.width-1+left_padding
+                    float_x = float_x if float_x < (self.width - 1) else self.width - 1
+                    float_y = y*self.height-1+top_padding
+                    float_y = float_y if float_y < (self.height - 1) else self.height - 1
+                    
+                    
                     
                     keypoint_label[heatmaps_index] = np.asarray([
-                        float((x*self.width-1+left_padding)/self.width),
-                        float((y*self.height-1+top_padding)/self.height)
+                        float((float_x/self.width*2)-1),
+                        float((float_x/self.height*2)-1)
                     ])
                     
 

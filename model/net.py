@@ -69,12 +69,10 @@ class HandGestureNet(nn.Module):
         self.max_hand_num = max_hand_num
         self.unet = UNet()
         self.unet_output_dim = 537600  # UNet输出的扁平化维度
-        self.mlp = MLPHead(self.unet_output_dim, max_hand_num)
-        # self.gesture_heads = nn.ModuleList([nn.Linear(1, 1) for _ in range(max_hand_num)])
-        # 调整关键点检测头的输入维度为整个gesture_logits的输出
-        self.keypoint_heads = nn.ModuleList([nn.Linear(max_hand_num, 3) for _ in range(1 * 21)])
+        self.mlp = MLPHead(self.unet_output_dim, self.unet_output_dim)  # 修改 MLPHead 的输出维度
+        self.kc = 21  # 假设每只手有21个关键点
+        self.keypoint_heads = nn.ModuleList([nn.Linear(self.unet_output_dim, 2) for _ in range(self.kc)])
         self.device = device
-        self.kc = 21
         
     def forward(self, x):
         # 使用 U-Net 提取特征
@@ -98,8 +96,10 @@ class HandGestureNet(nn.Module):
 
 
         # 关键点检测
-        keypoints = torch.stack([head(gesture_logits) for head in self.keypoint_heads], dim=1)
-        keypoints = torch.clamp((keypoints + 1) / 2, 0, 1)  # 将其中的每一个元素控制在 [0, 1] 之间
+        keypoints = [head(flat_features) for head in self.keypoint_heads]
+        keypoints = torch.stack(keypoints, dim=1)
+        # print(f"Net Keypoints: \n{keypoints}")
+        # keypoints = torch.clamp((keypoints + 1) / 2, 0, 1)  # 将其中的每一个元素控制在 [0, 1] 之间
 
         # 调整keypoints形状以匹配Datasets输出
         batch_size = keypoints.shape[0]

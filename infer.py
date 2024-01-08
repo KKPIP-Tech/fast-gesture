@@ -5,13 +5,13 @@ import numpy as np
 from time import time
 from model.net import HandGestureNet
 
-device = "cpu" if torch.cuda.is_available() else "mps"
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 # 加载模型
 net = HandGestureNet(max_hand_num=5, device=device)
 # 加载模型
 # net = HandGestureNet(max_hand_num=您的最大手部数量)  # 创建模型实例
-net = torch.load("run/train/exp_7/model_epoch_7.pth")  # 加载模型文件
+net = torch.load("run/train/exp_6/model_epoch_0.pth")  # 加载模型文件
 net.to(device)
 net.eval()
 
@@ -48,13 +48,19 @@ while True:
         
         # 绘制关键点
         for x, y in keypoints:
-            x, y = int(x * 256), int(y * 256)  # 将坐标转换回原图尺寸
+            x = (x+1)/2
+            y = (y+1)/2
+            x, y = int(x * 320), int(y * 320)  # 将坐标转换回原图尺寸
             cv2.circle(image, (x, y), 3, (0, 255, 0), -1)
 
         # 计算手势框坐标并绘制
         x_min, y_min = np.min(keypoints, axis=0)
         x_max, y_max = np.max(keypoints, axis=0)
         x_min, y_min, x_max, y_max = [int(val * 256) for val in [x_min, y_min, x_max, y_max]]
+        x_min = int((x_min+1)/2)
+        y_min = int((y_min+1)/2)
+        x_max = int((x_max+1)/2)
+        y_max = int((y_max+1)/2)
         cv2.rectangle(image, (x_min, y_min), (x_max, y_max), (255, 0, 0), 2)
 
         # 在框上方打印手势类别
