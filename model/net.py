@@ -207,8 +207,10 @@ class HandGestureNet(nn.Module):
             # outputs.append(one_batch_outputs)
         
         gesture_values_tensor = torch.tensor(class_pred, device=self.device,requires_grad=True,  dtype=torch.float)
-        keypoints_pred_tensors = [torch.tensor(hd, requires_grad=True) for hd in keypoints_pred]
+        keypoints_pred_tensors = [torch.tensor(hd, requires_grad=True, device=self.device) for hd in keypoints_pred]
+        # print(f"keypoints_pred_tensors: {keypoints_pred_tensors}")
         keypoints_pred_tensor = torch.stack(keypoints_pred_tensors)
+        
         
         return gesture_values_tensor.requires_grad_(), keypoints_pred_tensor.requires_grad_()
 

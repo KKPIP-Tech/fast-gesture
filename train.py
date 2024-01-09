@@ -112,8 +112,8 @@ def train(opt, save_path):
             loss_g = gestures_loss(gesture_values, class_labels)
 
             # print()
-            print(f"pred_keypoints: \n{keypoints_outputs}") 
-            print(f"label_keypoints: \n{keypoints_label}")
+            # print(f"pred_keypoints: \n{keypoints_outputs}") 
+            # print(f"label_keypoints: \n{keypoints_label}")
             
             # 关键点检测损失
             # keypoints_label = keypoints_label.view(-1, keypoints_label.shape[-3], keypoints_label.shape[-2], keypoints_label.shape[-1])  # 调整关键点标签的形状
@@ -150,15 +150,15 @@ def run(opt):
 
 if __name__ == "__main__":
     parse = argparse.ArgumentParser()
-    parse.add_argument('--device', type=str, default='mps', help='cuda or cpu or mps')
-    parse.add_argument('--batch_size', type=int, default=4, help='batch size')
+    parse.add_argument('--device', type=str, default='cuda', help='cuda or cpu or mps')
+    parse.add_argument('--batch_size', type=int, default=8, help='batch size')
     parse.add_argument('--img_size', type=int, default=320, help='trian img size')
     parse.add_argument('--epochs', type=int, default=300, help='max train epoch')
     parse.add_argument('--data', type=str,default='./data', help='datasets config path')
     parse.add_argument('--save_period', type=int, default=4, help='save per n epoch')
     parse.add_argument('--workers', type=int, default=6, help='thread num to load data')
     parse.add_argument('--shuffle', action='store_false', help='chose to unable shuffle in Dataloader')
-    parse.add_argument('--save_path', type=str, default='./run/train/')
+    parse.add_argument('--save_path', type=str, default='/home/kd/WD_1_Data4T/TrainResult/')
     parse.add_argument('--save_name', type=str, default='exp')
     parse.add_argument('--lr', type=float, default=0.01)
     parse.add_argument('--optimizer', type=str, default='Adam', help='only support: [Adam, SGD]')
