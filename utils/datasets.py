@@ -60,7 +60,7 @@ class Datasets(torch.utils.data.Dataset):
                     label_path = search_labels_path + filename.replace(".jpg", ".json")
                     images_path.append([image_path, label_path, names.index(name)])
                     # cnt += 1
-                    # if cnt == 20:
+                    # if cnt == 5:
                     #     break
         self.images_path = images_path
         

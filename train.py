@@ -47,7 +47,16 @@ def train(opt, save_path):
     log_file = save_path + "/record.log"
     
     # set device
-    device = opt.device if torch.cuda.is_available() else 'cpu'
+    user_set_device = opt.device
+    if user_set_device == 'cpu':
+        device = user_set_device
+    elif user_set_device == 'cuda':
+        device = user_set_device if torch.cuda.is_available() else 'cpu'
+    elif user_set_device == 'mps':
+        device = user_set_device if torch.backends.mps.is_available() else 'cpu'
+    else:
+        print(f" Your Device Setting: {user_set_device} is not support!")
+    
     print(f"Device: {device}")
 
     # set datasets
@@ -100,23 +109,25 @@ def train(opt, save_path):
             # class_labels = class_labels.view(-1)  # 将手势标签扁平化
             # print(f"keypoints_label shape: {keypoints_label.shape}")
             # gesture_values = gesture_values.view(-1, gesture_values.size(-1))  # 调整形状以匹配标签
-            loss_g += gestures_loss(gesture_values, class_labels)
+            loss_g = gestures_loss(gesture_values, class_labels)
 
             # print()
-            # print(f"pred_keypoints: \n{keypoints_outputs}") 
-            # print(f"label_keypoints: \n{keypoints_label}")
+            print(f"pred_keypoints: \n{keypoints_outputs}") 
+            print(f"label_keypoints: \n{keypoints_label}")
             
             # 关键点检测损失
             # keypoints_label = keypoints_label.view(-1, keypoints_label.shape[-3], keypoints_label.shape[-2], keypoints_label.shape[-1])  # 调整关键点标签的形状
             # keypoints_outputs = keypoints_outputs.view(-1, keypoints_outputs.shape[-2], keypoints_outputs.shape[-1])  # 确保输出形状正确
-            loss_k += keypoints_loss(keypoints_outputs, keypoints_label)
+            loss_k = keypoints_loss(keypoints_outputs, keypoints_label)
             
-            loss_g.backward()
-            loss_k.backward()
+            loss = loss_g + loss_k
+            
+            # loss_g.backward()
+            loss.backward()
             optimizer.step()
 
-            total_loss += loss_g.item()
-            total_loss += loss_k.item()
+            # total_loss += loss_g.item()
+            total_loss += loss.item()
             min_loss = min(min_loss, total_loss)
             max_loss = max(max_loss, total_loss)
             avg_loss = total_loss / (index + 1)
@@ -126,7 +137,7 @@ def train(opt, save_path):
         # print(f"loss item: {loss.item()}")
         # if i % 10 == 9:  # 每10个batch打印一次
         print(f"[{epoch + 1}] | -> avg_loss {avg_loss:.4f}, min_loss {min_loss:.4f}, max_loss {max_loss:.4f}")
-        torch.save(net, save_path + f'/model_epoch_{epoch}.pth')
+        torch.save(net.state_dict(), save_path + f'/model_epoch_{epoch}.pt')
 
     print('Finished Training')
 
@@ -139,15 +150,15 @@ def run(opt):
 
 if __name__ == "__main__":
     parse = argparse.ArgumentParser()
-    parse.add_argument('--device', type=str, default='cuda', help='cuda or cpu')
-    parse.add_argument('--batch_size', type=int, default=1, help='batch size')
+    parse.add_argument('--device', type=str, default='mps', help='cuda or cpu or mps')
+    parse.add_argument('--batch_size', type=int, default=4, help='batch size')
     parse.add_argument('--img_size', type=int, default=320, help='trian img size')
     parse.add_argument('--epochs', type=int, default=300, help='max train epoch')
     parse.add_argument('--data', type=str,default='./data', help='datasets config path')
     parse.add_argument('--save_period', type=int, default=4, help='save per n epoch')
     parse.add_argument('--workers', type=int, default=6, help='thread num to load data')
     parse.add_argument('--shuffle', action='store_false', help='chose to unable shuffle in Dataloader')
-    parse.add_argument('--save_path', type=str, default='/home/kd/WD_1_Data4T/TrainResult/')
+    parse.add_argument('--save_path', type=str, default='./run/train/')
     parse.add_argument('--save_name', type=str, default='exp')
     parse.add_argument('--lr', type=float, default=0.01)
     parse.add_argument('--optimizer', type=str, default='Adam', help='only support: [Adam, SGD]')

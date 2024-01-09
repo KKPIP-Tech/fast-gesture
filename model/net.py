@@ -14,7 +14,7 @@ class UNetBlock(nn.Module):
             self.conv = nn.Sequential(
                 nn.Conv2d(in_channels, out_channels, 4, 2, 1, bias=False),
                 nn.BatchNorm2d(out_channels),
-                nn.LeakyReLU(),
+                nn.ReLU(),
             )
             # 残差连接中的降采样
             self.residual = nn.Sequential(
@@ -25,7 +25,7 @@ class UNetBlock(nn.Module):
             self.conv = nn.Sequential(
                 nn.ConvTranspose2d(in_channels, out_channels // 2, 4, 2, 1, bias=False),
                 nn.BatchNorm2d(out_channels // 2),
-                nn.LeakyReLU(),
+                nn.ReLU(),
             )
             # 残差连接中的升采样
             self.residual = nn.Sequential(
@@ -37,7 +37,7 @@ class UNetBlock(nn.Module):
         # 可选的 Dropout 层
         self.use_dropout = use_dropout
         if use_dropout:
-            self.dropout = nn.Dropout(0.5)
+            self.dropout = nn.Dropout(0.1)
 
     def forward(self, x):
         identity = self.residual(x)
@@ -49,6 +49,43 @@ class UNetBlock(nn.Module):
 
         return out
 
+'''
+深度可分离卷积（Depthwise Separable Convolution）是一种卷积神经网络中的操作，
+它将标准卷积操作分解为两个步骤：
+    1. 深度卷积（Depthwise Convolution）
+    2. 逐点卷积（Pointwise Convolution）
+'''
+class DepthwiseSeparableConv(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size=3, padding=1):
+        super(DepthwiseSeparableConv, self).__init__()
+        # 深度卷积（Depthwise Convolution）
+        self.DSC = nn.Sequential(
+            nn.Conv2d(in_channels, in_channels, kernel_size=kernel_size, padding=padding, groups=in_channels),
+            nn.BatchNorm2d(out_channels),  # 批次归一化
+            nn.ReLU(inplace=True),  # 激活函数，用于输出
+            nn.Conv2d(in_channels, out_channels, kernel_size=1),
+            nn.BatchNorm2d(out_channels),  # 批次归一化
+            nn.ReLU(inplace=True),  # 激活函数，用于输出
+        )
+    
+    def forward(self, x):
+        x = self.DSC(x)
+        return x
+
+
+class UNetFinal(nn.Module):
+    def __init__(self, in_channel=64, out_channel=21) -> None:
+        super(UNetFinal, self).__init__()
+        
+        self.finalConv = nn.Sequential(
+            nn.Conv2d(in_channel, out_channel, kernel_size=1),
+            nn.Sigmoid()
+        )
+        
+    def forward(self, x):
+        return self.finalConv(x)
+
+
 class UNet(nn.Module):
     def __init__(self):
         super(UNet, self).__init__()
@@ -58,20 +95,30 @@ class UNet(nn.Module):
         self.down3 = UNetBlock(64, 128, down=True, use_dropout=False)
         self.down4 = UNetBlock(128, 256, down=True, use_dropout=True)
 
+        self.conv_layer = DepthwiseSeparableConv(256, 256)
+        
         # 上采样层
         self.up1 = UNetBlock(256, 256, down=False, use_dropout=True)
         self.up2 = UNetBlock(256, 128, down=False, use_dropout=False)
         self.up3 = UNetBlock(128, 64, down=False, use_dropout=False)
 
         # 最终卷积层
-        self.final = nn.Conv2d(64, 21, kernel_size=1)
+        # self.final = nn.Conv2d(64, 21, kernel_size=1)
+        self.final = UNetFinal(in_channel=64, out_channel=21)
 
     def forward(self, x):
         d1 = self.down1(x)
         d2 = self.down2(d1)
         d3 = self.down3(d2)
         d4 = self.down4(d3)
-        u1 = self.up1(d4)
+        
+        cl1 = self.conv_layer(d4)
+        cl2 = self.conv_layer(cl1)
+        cl3 = self.conv_layer(cl2)
+        cl4 = self.conv_layer(cl3)
+        cl5 = self.conv_layer(cl4)
+        
+        u1 = self.up1(cl5)
         u2 = self.up2(torch.cat([u1, d3], 1))
         u3 = self.up3(torch.cat([u2, d2], 1))
         return self.final(torch.cat([u3, d1], 1))
@@ -84,6 +131,7 @@ class MLPHead(nn.Module):
             nn.Linear(input_dim, 512),  # 调整输入维度以匹配UNet的输出
             nn.ReLU(),
             nn.Linear(512, output_dim),
+            # nn.Sigmoid()
         )
 
     def forward(self, x):
@@ -96,62 +144,83 @@ class HandGestureNet(nn.Module):
         self.max_hand_num = max_hand_num
         self.unet = UNet()
         self.unet_output_dim = 537600  # UNet输出的扁平化维度
-        self.mlp = MLPHead(self.unet_output_dim, self.unet_output_dim)  # 修改 MLPHead 的输出维度
+        self.mlp = MLPHead(self.unet_output_dim, self.max_hand_num)  # 修改 MLPHead 的输出维度
         self.kc = 21  # 假设每只手有21个关键点
-        self.keypoint_heads = nn.ModuleList([nn.Linear(self.unet_output_dim, 2) for _ in range(self.kc)])
+        self.keypoint_heads = nn.ModuleList(
+            [nn.Linear(5, 2) for _ in range(self.kc)]
+        )
         self.device = device
         
     def forward(self, x):
-        # 使用 U-Net 提取特征
-        features = self.unet(x)  # 假设的 U-Net 结构
-        flat_features = features.view(features.size(0), -1)
+        # size: 640
+        # x shape: [batch_size, image_channel, size, size]
+        # print(f"input shape: {x.shape}")
+        tensor_19 = torch.tensor(19, device=self.device) 
+        class_pred = []
+        keypoints_pred = []
+        for one_batch in x:
 
-        # 使用 MLP 进行手势识别
-        gesture_logits = self.mlp(flat_features)
-        gesture_probs = F.softmax(gesture_logits, dim=1)
-        gesture_values = torch.argmax(gesture_probs, dim=1)
+            one_batch = one_batch.unsqueeze(0)
+            # print(f"one_batch: {one_batch.shape}")
+            features = self.unet(one_batch)  # [batch_size, keypoints_number, size/2, size/2]
+            # print(f"feature shape: {features.shape}")
+            flat_features = features.view(features.size(0), -1)
+            gesture_logits = self.mlp(flat_features)
 
-        # # 解决MPS不支持的操作
-        # class_labels = gesture_values.view(-1, 1, 1).repeat(1, self.max_hand_num, 1).float()
-        # class_labels_cpu = class_labels.to('cpu')
-        # class_labels_cpu[class_labels_cpu == 0] = 19
-        # class_labels = class_labels_cpu.to(class_labels.device)
+            # 获取手势分类的概率分布
+            gesture_probs = F.softmax(gesture_logits, dim=1)
+            # 选择概率最高的类别作为预测结果
+            gesture_values = torch.argmax(gesture_probs, dim=1)
+
+
+            # 关键点检测头处理
+            keypoints = [head(gesture_logits) for head in self.keypoint_heads]
+
+            # print(f"Keypoints: \n{keypoints}")
+
+            # print(f"Gesture Values Length: {gesture_values.shape}")
+            gesture_batch = []
+            keypoint_batch = []
+            one_batch_outputs = []
+            for i in range(self.max_hand_num):
+                hand_data = []
+                # print(f"keypoints len: {len(keypoints)}")
+                for kp in keypoints:
+                    if kp.shape[0] > i:
+                        hand_data.append(
+                            [(kp[i][0] + 1)/2,  # 保持张量形式
+                            (kp[i][1] + 1)/2]  # 保持张量形式
+                        )
+                    else:
+                        hand_data.append([torch.tensor(0.0, requires_grad=True, device=self.device), 
+                                        torch.tensor(0.0, requires_grad=True, device=self.device)])
+                gesture_value = gesture_values[i] if i < len(gesture_values) else tensor_19
+                # one_batch_outputs.append([gesture_value, hand_data])
+                gesture_batch.append([gesture_value.item()])  # 添加单个手势值
+                keypoint_batch.append(hand_data)  # 添加该批次的关键点数据
+            class_pred.append(gesture_batch)
+            # print(f"len(keypoint_batch)", len(keypoint_batch))
+            
+            keypoint_batch_tensors = [torch.tensor(hd, requires_grad=True) for hd in keypoint_batch]
+            keypoint_batch_tensors = torch.stack(keypoint_batch_tensors)
+            keypoints_pred.append(keypoint_batch_tensors)
+            # outputs.append(one_batch_outputs)
         
-        # 调整手势类别标签的形状以匹配数据集的输出
-        class_labels = gesture_values.view(-1, 1, 1).repeat(1, self.max_hand_num, 1).float()
-        class_labels[class_labels == 0] = 19  # 将空白手势类别填充为 19
-
-
-        # 关键点检测
-        keypoints = [head(flat_features) for head in self.keypoint_heads]
-        keypoints = torch.stack(keypoints, dim=1)
-        # print(f"Net Keypoints: \n{keypoints}")
-        # keypoints = torch.clamp((keypoints + 1) / 2, 0, 1)  # 将其中的每一个元素控制在 [0, 1] 之间
-
-        # 调整keypoints形状以匹配Datasets输出
-        batch_size = keypoints.shape[0]
-        total_kps = self.max_hand_num * self.kc * 2
-        current_size = keypoints.numel()
-
-        # 如果keypoints数量不足，则用0填充
-        if current_size < total_kps * batch_size:
-            padding_size = total_kps * batch_size - current_size
-            padding = torch.zeros(padding_size, device=keypoints.device)
-            keypoints = torch.cat([keypoints.flatten(), padding], dim=0)
-
-        keypoints = keypoints.view(batch_size, self.max_hand_num, self.kc, 2)
-
-        return class_labels.requires_grad_(), keypoints.requires_grad_()
+        gesture_values_tensor = torch.tensor(class_pred, device=self.device,requires_grad=True,  dtype=torch.float)
+        keypoints_pred_tensors = [torch.tensor(hd, requires_grad=True) for hd in keypoints_pred]
+        keypoints_pred_tensor = torch.stack(keypoints_pred_tensors)
+        
+        return gesture_values_tensor.requires_grad_(), keypoints_pred_tensor.requires_grad_()
 
     
 if __name__ == "__main__":
     # 实例化网络
-    max_hand_num = 5  # 可以根据实际需求调整
-    net = HandGestureNet(max_hand_num)
+    max_hand_num = 2  # 可以根据实际需求调整
+    device = torch.device("cuda" if torch.cuda.is_available() else "mps")
+    net = HandGestureNet(max_hand_num, device=device)
 
     # 设置设备
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     net = net.to(device)
 
     # 打印网络摘要
-    summary(net, input_size=(3, 256, 256), batch_size=8)
+    summary(net, input_size=(3, 320, 320), batch_size=4)
