@@ -7,36 +7,63 @@ from torchsummary import summary
 class UNetBlock(nn.Module):
     def __init__(self, in_channels, out_channels, down=True, use_dropout=False):
         super(UNetBlock, self).__init__()
+        self.down = down
+
+        # 主要卷积或转置卷积块
         if down:
-            self.block = nn.Sequential(
+            self.conv = nn.Sequential(
                 nn.Conv2d(in_channels, out_channels, 4, 2, 1, bias=False),
                 nn.BatchNorm2d(out_channels),
                 nn.LeakyReLU(),
             )
+            # 残差连接中的降采样
+            self.residual = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, 1, 2, bias=False),
+                nn.BatchNorm2d(out_channels)
+            )
         else:
-            self.block = nn.Sequential(
+            self.conv = nn.Sequential(
                 nn.ConvTranspose2d(in_channels, out_channels // 2, 4, 2, 1, bias=False),
                 nn.BatchNorm2d(out_channels // 2),
                 nn.LeakyReLU(),
             )
+            # 残差连接中的升采样
+            self.residual = nn.Sequential(
+                nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True),
+                nn.Conv2d(in_channels, out_channels // 2, 1, 1, bias=False),
+                nn.BatchNorm2d(out_channels // 2)
+            )
 
-        # if use_dropout:
-        #     self.block = nn.Sequential(self.block, nn.Dropout(0.5))
+        # 可选的 Dropout 层
+        self.use_dropout = use_dropout
+        if use_dropout:
+            self.dropout = nn.Dropout(0.5)
 
     def forward(self, x):
-        return self.block(x)
+        identity = self.residual(x)
+        out = self.conv(x)
+        out = out + identity  # 残差连接
 
+        if self.use_dropout:
+            out = self.dropout(out)
+
+        return out
 
 class UNet(nn.Module):
     def __init__(self):
         super(UNet, self).__init__()
+        # 下采样层
         self.down1 = UNetBlock(3, 32, down=True, use_dropout=False)
         self.down2 = UNetBlock(32, 64, down=True, use_dropout=False)
         self.down3 = UNetBlock(64, 128, down=True, use_dropout=False)
         self.down4 = UNetBlock(128, 256, down=True, use_dropout=True)
+
+        # 上采样层
         self.up1 = UNetBlock(256, 256, down=False, use_dropout=True)
         self.up2 = UNetBlock(256, 128, down=False, use_dropout=False)
         self.up3 = UNetBlock(128, 64, down=False, use_dropout=False)
+
+        # 最终卷积层
         self.final = nn.Conv2d(64, 21, kernel_size=1)
 
     def forward(self, x):
