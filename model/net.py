@@ -192,7 +192,6 @@ class HandGestureNet(nn.Module):
         return gesture_values_tensor, keypoints_pred_tensor
 
 
-    
 if __name__ == "__main__":
     # 实例化网络
     max_hand_num = 2  # 可以根据实际需求调整

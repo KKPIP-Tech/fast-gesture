@@ -30,13 +30,21 @@ def create_path(path):
             return new_path
         suffix += 1
 
-def create_gaussian_kernel(size=15, sigma=5):
-    # 生成一个高斯核
-    m, n = [(ss - 1.) / 2. for ss in (size, size)]
-    y, x = torch.meshgrid(torch.arange(-m, m+1), torch.arange(-n, n+1), indexing='xy')
-    h = torch.exp(-(x*x + y*y) / (2*sigma*sigma))
-    h[h < torch.finfo(h.dtype).eps * h.max()] = 0
-    return h / h.sum()
+
+def select_optim(net:HandGestureNet, opt, user_set_optim:str=None):
+    if user_set_optim == "Adam":
+        optimizer = optim.Adam(net.parameters(), lr=opt.lr)
+    elif user_set_optim == "AdamW":
+        optimizer = optim.AdamW(net.parameters(), lr=opt.lr)
+    elif user_set_optim == "SGD":
+        optimizer = optim.SGD(net.parameters(), lr=opt.lr)
+    elif user_set_optim == "":
+        optimizer = optim.ASGD(net.parameters(), lr=opt.lr)
+    else:
+        print(f"Your Input Setting Optimizer {user_set_optim} is Not In [Adam, AdamW, SGD, ASGD]")
+        print(f"Use Default Optimizer Adam")
+        optimizer = optim.Adam(net.parameters(), lr=opt.lr)
+    return optimizer
      
 
 
@@ -78,7 +86,9 @@ def train(opt, save_path):
     gestures_loss = nn.L1Loss().to(device=device)
     
     # 优化器
-    optimizer = optim.Adam(net.parameters(), lr=opt.lr)
+    user_set_optim = opt.optimizer
+    optimizer = select_optim(net=net, opt=opt, user_set_optim=user_set_optim)
+        
     scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer=optimizer, T_0=1)
     
     for epoch in range(opt.epochs):
@@ -170,7 +180,7 @@ if __name__ == "__main__":
     parse.add_argument('--save_path', type=str, default='./run/train/')
     parse.add_argument('--save_name', type=str, default='exp')
     parse.add_argument('--lr', type=float, default=0.001)
-    parse.add_argument('--optimizer', type=str, default='Adam', help='only support: [Adam, SGD]')
+    parse.add_argument('--optimizer', type=str, default='Adam', help='only support: [Adam, AdamW, SGD]')
     # parse.add_argument('--loss', type=str, default='MSELoss', help='[MSELoss]')
     parse.add_argument('--resume', action='store_true')
     parse = parse.parse_args()
