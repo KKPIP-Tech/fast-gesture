@@ -75,11 +75,12 @@ def train(opt, save_path):
 
     # 损失函数
     keypoints_loss = nn.MSELoss().to(device=device)
-    gestures_loss = nn.CrossEntropyLoss().to(device=device)
+    gestures_loss = nn.L1Loss().to(device=device)
     
     # 优化器
-    optimizer = optim.AdamW(net.parameters(), lr=opt.lr)
-
+    optimizer = optim.Adam(net.parameters(), lr=opt.lr)
+    scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer=optimizer, T_0=1)
+    
     for epoch in range(opt.epochs):
         # model.train()
         total_loss = 0.0
@@ -103,7 +104,7 @@ def train(opt, save_path):
 
             # class_labels shape: [batch_size, max_hand_num, 1]
             # keypoints_label shape: [batch_size, max_hand_num, kc, 2]
-            # print(f"pred_gesture: \n{gesture_values}") 
+            # print(f"pred_gesture: \n{gesture_values}")  
             # print(f"label_gesture: \n{class_labels}")
             # 手势识别损失
             # class_labels = class_labels.view(-1)  # 将手势标签扁平化
@@ -132,7 +133,7 @@ def train(opt, save_path):
             max_loss = max(max_loss, total_loss)
             avg_loss = total_loss / (index + 1)
             
-            pbar.set_description(f"[Epoch {epoch}|avg_loss {avg_loss:.4f}->]")
+            pbar.set_description(f"[Epoch {epoch} | avg_loss {avg_loss:.4f}->]")
             
             #         # 检查和打印梯度
             # for name, param in net.named_parameters():
@@ -142,8 +143,10 @@ def train(opt, save_path):
             #         print(f"层 {name} 没有梯度")
         # print(f"loss item: {loss.item()}")
         # if i % 10 == 9:  # 每10个batch打印一次
-        print(f"[{epoch + 1}] | -> avg_loss {avg_loss:.4f}, min_loss {min_loss:.4f}, max_loss {max_loss:.4f}")
+        scheduler.step(opt.epochs)
+        print(f"[Epoch {epoch}] | -> avg_loss: {avg_loss:.4f}, min_loss: {min_loss:.4f}, max_loss: {max_loss:.4f}")
         torch.save(net.state_dict(), save_path + f'/model_epoch_{epoch}.pt')
+        print()
 
     print('Finished Training')
 
@@ -166,9 +169,9 @@ if __name__ == "__main__":
     parse.add_argument('--shuffle', action='store_false', help='chose to unable shuffle in Dataloader')
     parse.add_argument('--save_path', type=str, default='./run/train/')
     parse.add_argument('--save_name', type=str, default='exp')
-    parse.add_argument('--lr', type=float, default=0.01)
+    parse.add_argument('--lr', type=float, default=0.001)
     parse.add_argument('--optimizer', type=str, default='Adam', help='only support: [Adam, SGD]')
-    parse.add_argument('--loss', type=str, default='MSELoss', help='[MSELoss]')
+    # parse.add_argument('--loss', type=str, default='MSELoss', help='[MSELoss]')
     parse.add_argument('--resume', action='store_true')
     parse = parse.parse_args()
 

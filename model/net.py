@@ -153,7 +153,7 @@ class HandGestureNet(nn.Module):
         
     def forward(self, x):
         # x shape: [batch_size, image_channel, size, size]
-        tensor_19 = torch.tensor(19, device=self.device) 
+        tensor_19 = torch.tensor(6, device=self.device) 
         class_pred = []
         keypoints_pred = []
 
@@ -175,8 +175,8 @@ class HandGestureNet(nn.Module):
                 for kp in keypoints:
                     kp_data = kp[i] if i < kp.size(0) else torch.zeros(2, device=self.device)
                     # 保持张量形式，但不使用原地操作
-                    kp_data_normalized = (kp_data + 1) / 2
-                    hand_data.append(kp_data_normalized)
+                    # kp_data_normalized = (kp_data + 1) / 2
+                    hand_data.append(kp_data)
 
                 gesture_value = gesture_values[i] if i < gesture_values.size(0) else tensor_19
                 gesture_batch.append(gesture_value.unsqueeze(0))

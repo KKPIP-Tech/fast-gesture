@@ -11,7 +11,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 net = HandGestureNet(max_hand_num=5, device=device)
 # 加载模型
 # net = HandGestureNet(max_hand_num=您的最大手部数量)  # 创建模型实例
-net.load_state_dict(torch.load("run/train/exp_10/model_epoch_0.pt"))  # 加载模型文件
+net.load_state_dict(torch.load("run/train/exp/model_epoch_3.pt"))  # 加载模型文件
 net.to(device)
 net.eval()
 
@@ -41,8 +41,9 @@ while True:
         # print(output)
         gesture_value, keypoints = output
         gesture_label = gesture_value.item()  # 假设有一个类别标签列表
-        # if gesture_label > len(names):
-        #     continue
+        print(f"Gesture ID: {gesture_label}")
+        if gesture_label > len(names):
+            continue
         gesture_label = str(gesture_label)  # names[gesture_label]
         keypoints = keypoints.cpu().detach().numpy() 
         

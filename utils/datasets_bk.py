@@ -18,7 +18,7 @@ from utils.augment import letterbox
 
 class Datasets(torch.utils.data.Dataset):
     def __init__(self, config_file, img_size):
-
+        
         config_file = config_file + "/config.yaml"
         print(f"Datasets Config File: {config_file}")
         
@@ -46,7 +46,6 @@ class Datasets(torch.utils.data.Dataset):
     
     def __getitem__(self, index):
         start_time = time()
-        
         # get image path, lebel path, name index
         img_path, leb_path, ni = self.datapack[index]
         
@@ -106,10 +105,10 @@ class Datasets(torch.utils.data.Dataset):
             if is_index_over_limit:
                 break
         
+        # convert data to tensor ------------
         tensor_letterbox_img = transforms.ToTensor()(letterbox_img)
         tensor_keypoints_lab = torch.tensor(np.asarray(keypoints_labels), dtype=torch.float32)
         tensor_gestures_leb = torch.tensor(np.asarray(gestures_labels), dtype=torch.float32)
-        
         
         return tensor_letterbox_img, tensor_keypoints_lab, tensor_gestures_leb
      
