@@ -11,7 +11,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 net = HandGestureNet(max_hand_num=5, device=device)
 # 加载模型
 # net = HandGestureNet(max_hand_num=您的最大手部数量)  # 创建模型实例
-net.load_state_dict(torch.load("run/train/exp/model_epoch_0.pt"))  # 加载模型文件
+net.load_state_dict(torch.load("run/train/exp_10/model_epoch_0.pt"))  # 加载模型文件
 net.to(device)
 net.eval()
 
@@ -50,8 +50,8 @@ while True:
         
         # 绘制关键点
         for x, y in keypoints:
-            x = (x+1)/2
-            y = (y+1)/2
+            # x = (x+1)/2
+            # y = (y+1)/2
             x, y = int(x * 320), int(y * 320)  # 将坐标转换回原图尺寸
             cv2.circle(image, (x, y), 3, (0, 255, 0), -1)
 

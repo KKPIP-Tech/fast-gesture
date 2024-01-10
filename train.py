@@ -12,7 +12,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from model.net import HandGestureNet
-from utils.datasets import Datasets
+from utils.datasets_bk import Datasets
 
 torch.cuda.empty_cache()
 
@@ -60,7 +60,7 @@ def train(opt, save_path):
     print(f"Device: {device}")
 
     # set datasets
-    datasets = Datasets(dataset_conf=data_json, img_size=opt.img_size)
+    datasets = Datasets(config_file=data_json, img_size=opt.img_size)
     dataloader = DataLoader(
         dataset=datasets,
         batch_size=opt.batch_size,
@@ -69,7 +69,7 @@ def train(opt, save_path):
     )
     
     # 初始化网络
-    max_hand_num = 5
+    max_hand_num = datasets.get_max_hand_num()
     net = HandGestureNet(max_hand_num=max_hand_num, device=device)
     net.to(device=device)
 
@@ -78,7 +78,7 @@ def train(opt, save_path):
     gestures_loss = nn.CrossEntropyLoss().to(device=device)
     
     # 优化器
-    optimizer = optim.Adam(net.parameters(), lr=opt.lr)
+    optimizer = optim.AdamW(net.parameters(), lr=opt.lr)
 
     for epoch in range(opt.epochs):
         # model.train()
@@ -111,7 +111,7 @@ def train(opt, save_path):
             # gesture_values = gesture_values.view(-1, gesture_values.size(-1))  # 调整形状以匹配标签
             loss_g = gestures_loss(gesture_values, class_labels)
 
-            # print()
+            # # print()
             # print(f"pred_keypoints: \n{keypoints_outputs}") 
             # print(f"label_keypoints: \n{keypoints_label}")
             
@@ -134,6 +134,12 @@ def train(opt, save_path):
             
             pbar.set_description(f"[Epoch {epoch}|avg_loss {avg_loss:.4f}->]")
             
+            #         # 检查和打印梯度
+            # for name, param in net.named_parameters():
+            #     if param.grad is not None:
+            #         print(f"层 {name} 的梯度: {param.grad}")
+            #     else:
+            #         print(f"层 {name} 没有梯度")
         # print(f"loss item: {loss.item()}")
         # if i % 10 == 9:  # 每10个batch打印一次
         print(f"[{epoch + 1}] | -> avg_loss {avg_loss:.4f}, min_loss {min_loss:.4f}, max_loss {max_loss:.4f}")
@@ -150,15 +156,15 @@ def run(opt):
 
 if __name__ == "__main__":
     parse = argparse.ArgumentParser()
-    parse.add_argument('--device', type=str, default='cuda', help='cuda or cpu or mps')
-    parse.add_argument('--batch_size', type=int, default=8, help='batch size')
+    parse.add_argument('--device', type=str, default='mps', help='cuda or cpu or mps')
+    parse.add_argument('--batch_size', type=int, default=1, help='batch size')
     parse.add_argument('--img_size', type=int, default=320, help='trian img size')
     parse.add_argument('--epochs', type=int, default=300, help='max train epoch')
     parse.add_argument('--data', type=str,default='./data', help='datasets config path')
     parse.add_argument('--save_period', type=int, default=4, help='save per n epoch')
     parse.add_argument('--workers', type=int, default=6, help='thread num to load data')
     parse.add_argument('--shuffle', action='store_false', help='chose to unable shuffle in Dataloader')
-    parse.add_argument('--save_path', type=str, default='/home/kd/WD_1_Data4T/TrainResult/')
+    parse.add_argument('--save_path', type=str, default='./run/train/')
     parse.add_argument('--save_name', type=str, default='exp')
     parse.add_argument('--lr', type=float, default=0.01)
     parse.add_argument('--optimizer', type=str, default='Adam', help='only support: [Adam, SGD]')

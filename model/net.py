@@ -147,78 +147,56 @@ class HandGestureNet(nn.Module):
         self.mlp = MLPHead(self.unet_output_dim, self.max_hand_num)  # 修改 MLPHead 的输出维度
         self.kc = 21  # 假设每只手有21个关键点
         self.keypoint_heads = nn.ModuleList(
-            [nn.Linear(5, 2) for _ in range(self.kc)]
+            [nn.Linear(self.max_hand_num, 2) for _ in range(self.kc)]
         )
         self.device = device
         
     def forward(self, x):
-        # size: 640
         # x shape: [batch_size, image_channel, size, size]
-        # print(f"input shape: {x.shape}")
         tensor_19 = torch.tensor(19, device=self.device) 
         class_pred = []
         keypoints_pred = []
-        for one_batch in x:
 
+        for one_batch in x:
             one_batch = one_batch.unsqueeze(0)
-            # print(f"one_batch: {one_batch.shape}")
-            features = self.unet(one_batch)  # [batch_size, keypoints_number, size/2, size/2]
-            # print(f"feature shape: {features.shape}")
+            features = self.unet(one_batch)  # [1, keypoints_number, size/2, size/2]
             flat_features = features.view(features.size(0), -1)
             gesture_logits = self.mlp(flat_features)
 
-            # 获取手势分类的概率分布
             gesture_probs = F.softmax(gesture_logits, dim=1)
-            # 选择概率最高的类别作为预测结果
             gesture_values = torch.argmax(gesture_probs, dim=1)
 
-
-            # 关键点检测头处理
             keypoints = [head(gesture_logits) for head in self.keypoint_heads]
 
-            # print(f"Keypoints: \n{keypoints}")
-
-            # print(f"Gesture Values Length: {gesture_values.shape}")
             gesture_batch = []
             keypoint_batch = []
-            one_batch_outputs = []
             for i in range(self.max_hand_num):
                 hand_data = []
-                # print(f"keypoints len: {len(keypoints)}")
                 for kp in keypoints:
-                    if kp.shape[0] > i:
-                        hand_data.append(
-                            [(kp[i][0] + 1)/2,  # 保持张量形式
-                            (kp[i][1] + 1)/2]  # 保持张量形式
-                        )
-                    else:
-                        hand_data.append([torch.tensor(0.0, requires_grad=True, device=self.device), 
-                                        torch.tensor(0.0, requires_grad=True, device=self.device)])
-                gesture_value = gesture_values[i] if i < len(gesture_values) else tensor_19
-                # one_batch_outputs.append([gesture_value, hand_data])
-                gesture_batch.append([gesture_value.item()])  # 添加单个手势值
-                keypoint_batch.append(hand_data)  # 添加该批次的关键点数据
-            class_pred.append(gesture_batch)
-            # print(f"len(keypoint_batch)", len(keypoint_batch))
-            
-            keypoint_batch_tensors = [torch.tensor(hd, requires_grad=True) for hd in keypoint_batch]
-            keypoint_batch_tensors = torch.stack(keypoint_batch_tensors)
-            keypoints_pred.append(keypoint_batch_tensors)
-            # outputs.append(one_batch_outputs)
-        
-        gesture_values_tensor = torch.tensor(class_pred, device=self.device,requires_grad=True,  dtype=torch.float)
-        keypoints_pred_tensors = [torch.tensor(hd, requires_grad=True, device=self.device) for hd in keypoints_pred]
-        # print(f"keypoints_pred_tensors: {keypoints_pred_tensors}")
-        keypoints_pred_tensor = torch.stack(keypoints_pred_tensors)
-        
-        
-        return gesture_values_tensor.requires_grad_(), keypoints_pred_tensor.requires_grad_()
+                    kp_data = kp[i] if i < kp.size(0) else torch.zeros(2, device=self.device)
+                    # 保持张量形式，但不使用原地操作
+                    kp_data_normalized = (kp_data + 1) / 2
+                    hand_data.append(kp_data_normalized)
+
+                gesture_value = gesture_values[i] if i < gesture_values.size(0) else tensor_19
+                gesture_batch.append(gesture_value.unsqueeze(0))
+                keypoint_batch.append(torch.stack(hand_data))
+
+            class_pred.append(torch.stack(gesture_batch))
+            keypoints_pred.append(torch.stack(keypoint_batch))
+
+        # 将所有结果转换为张量
+        gesture_values_tensor = torch.stack(class_pred).to(device=self.device, dtype=torch.float)
+        keypoints_pred_tensor = torch.stack(keypoints_pred).to(device=self.device)
+
+        return gesture_values_tensor, keypoints_pred_tensor
+
 
     
 if __name__ == "__main__":
     # 实例化网络
     max_hand_num = 2  # 可以根据实际需求调整
-    device = torch.device("cuda" if torch.cuda.is_available() else "mps")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     net = HandGestureNet(max_hand_num, device=device)
 
     # 设置设备
