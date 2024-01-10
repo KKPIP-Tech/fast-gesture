@@ -73,7 +73,7 @@ def train(opt, save_path):
         dataset=datasets,
         batch_size=opt.batch_size,
         num_workers=opt.workers,
-        shuffle=opt.shuffle
+        shuffle=True
     )
     
     # 初始化网络
@@ -169,7 +169,7 @@ def run(opt):
 
 if __name__ == "__main__":
     parse = argparse.ArgumentParser()
-    parse.add_argument('--device', type=str, default='mps', help='cuda or cpu or mps')
+    parse.add_argument('--device', type=str, default='cuda', help='cuda or cpu or mps')
     parse.add_argument('--batch_size', type=int, default=1, help='batch size')
     parse.add_argument('--img_size', type=int, default=320, help='trian img size')
     parse.add_argument('--epochs', type=int, default=300, help='max train epoch')

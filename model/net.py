@@ -153,7 +153,7 @@ class HandGestureNet(nn.Module):
         
     def forward(self, x):
         # x shape: [batch_size, image_channel, size, size]
-        tensor_19 = torch.tensor(6, device=self.device) 
+        tensor_19 = torch.tensor(1.0, device=self.device) 
         class_pred = []
         keypoints_pred = []
 
@@ -163,8 +163,9 @@ class HandGestureNet(nn.Module):
             flat_features = features.view(features.size(0), -1)
             gesture_logits = self.mlp(flat_features)
 
-            gesture_probs = F.softmax(gesture_logits, dim=1)
-            gesture_values = torch.argmax(gesture_probs, dim=1)
+            gesture_probs = F.softmax(gesture_logits, dim=1).squeeze(0)
+            # print(f"gesture probs shape: {gesture_probs.shape}")
+            # gesture_values = torch.argmax(gesture_probs, dim=1)
 
             keypoints = [head(gesture_logits) for head in self.keypoint_heads]
 
@@ -178,7 +179,9 @@ class HandGestureNet(nn.Module):
                     # kp_data_normalized = (kp_data + 1) / 2
                     hand_data.append(kp_data)
 
-                gesture_value = gesture_values[i] if i < gesture_values.size(0) else tensor_19
+                # print("gesture_probs:", gesture_probs)
+                
+                gesture_value = gesture_probs[i] if i < gesture_probs.size(0) else tensor_19
                 gesture_batch.append(gesture_value.unsqueeze(0))
                 keypoint_batch.append(torch.stack(hand_data))
 

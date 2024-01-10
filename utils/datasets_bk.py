@@ -68,7 +68,7 @@ class Datasets(torch.utils.data.Dataset):
         ]
         # Gestures Labels Shape [max_hand_num, 1]
         gestures_labels = [
-            [np.asarray(6)] for _ in range(self.max_hand_num)
+            [np.asarray(1.0)] for _ in range(self.max_hand_num)
         ]
         
         # load process data -----------------
@@ -124,20 +124,23 @@ class Datasets(torch.utils.data.Dataset):
         datapack: list = []  # [[img, leb, name_index]...]
         search_path: list = []
         
+        names_length = len(names) + 1
+        
         for name in names:
             # get all search dir by name index
             target_image_path = datasets_path + '/' + name + '/images/'
             target_label_path = datasets_path + '/' + name + '/labels/'
-            search_path.append([target_image_path, target_label_path])
+            search_path.append([target_image_path, target_label_path, name])
         
-        for target_image_path, target_label_path in search_path:
+        for target_image_path, target_label_path, name in search_path:
             index_count:int = 0
             for path_pack in os.walk(target_image_path):
                 for filename in path_pack[2]:
                     img = target_image_path + filename
                     label_name = filename.replace(".jpg", ".json")
                     leb = target_label_path + label_name
-                    name_index = names.index(name)
+                    name_index = names.index(name) / names_length
+                    
                     datapack.append(
                         [img, leb, name_index]
                     )

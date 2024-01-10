@@ -11,13 +11,14 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 net = HandGestureNet(max_hand_num=5, device=device)
 # 加载模型
 # net = HandGestureNet(max_hand_num=您的最大手部数量)  # 创建模型实例
-net.load_state_dict(torch.load("run/train/exp_1/model_epoch_1.pt"))  # 加载模型文件
+net.load_state_dict(torch.load("run/train/exp/model_epoch_0.pt"))  # 加载模型文件
 net.to(device)
 net.eval()
 
 names = ["one", "two", "five", "hold", "pickup"]
+names_length = len(names) + 1
 
-capture = cv2.VideoCapture(0)
+# capture = cv2.VideoCapture(0)
 
 while True:
 # 读取图像并进行预处理
@@ -41,13 +42,14 @@ while True:
         # print(output)
         gesture_value, keypoints = output
         gesture_label = gesture_value.item()  # 假设有一个类别标签列表
+        gesture_label = gesture_label * names_length
         print(f"Gesture ID: {gesture_label}")
         # if gesture_label > len(names):
         #     continue
         gesture_label = str(gesture_label)  # names[gesture_label]
         keypoints = keypoints.cpu().detach().numpy() 
         
-        print(f"keypoints on cpu: \n{keypoints}")
+        # print(f"keypoints on cpu: \n{keypoints}")
         
         # 绘制关键点
         for x, y in keypoints:

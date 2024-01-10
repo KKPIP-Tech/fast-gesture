@@ -104,7 +104,7 @@ class Datasets(torch.utils.data.Dataset):
             # object_labels = [[np.zeros((self.height, self.width)) for _ in range(self.kc)] for _ in range(self.max_hand_num)]  # 每个手的关键点及手势类别数据为一个元素
             
             object_labels = [[np.asarray([0.0, 0.0]).copy() for _ in range(self.kc)] for _ in range(self.max_hand_num)]
-            type_labels = [[np.asarray(19)] for _ in range(self.max_hand_num)]  # 其索引值对应 object_labels 当中的元素位置，用于存储对应手的手势类别
+            type_labels = [[np.asarray(1)] for _ in range(self.max_hand_num)]  # 其索引值对应 object_labels 当中的元素位置，用于存储对应手的手势类别
             
             hand_cnt = 0
             for one_hand_data in json_data:
