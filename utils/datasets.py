@@ -51,7 +51,18 @@ class Datasets(torch.utils.data.Dataset):
         # image process ---------------------
         original_img = cv2.imread(img_path)
         original_height, original_width = original_img.shape[:2]
+        # medianBlur_img = cv2.medianBlur(original_img, 5)
+        grey_img = cv2.cvtColor(original_img.copy(), cv2.COLOR_BGR2GRAY)
+        # gaussian_kernel = (5, 5)
+        # GaussianBlur_img = cv2.GaussianBlur(grey_img, gaussian_kernel, 0, 0)
+        # t,binary = cv2.threshold(grey_img,100,255, cv2.THRESH_BINARY)
+        thresh = cv2.Canny(grey_img, 0, 80, 50)
+        contours,hierarchy = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cv2.drawContours(original_img,contours,-1,(0,0,255),2) 
         resize_img = cv2.resize(original_img, (self.width, self.height), cv2.INTER_AREA)
+        
+        # cv2.imshow("Canny_image", resize_img)
+        # cv2.waitKey()
         
         # labels process --------------------
         with open(leb_path) as label_file:
@@ -82,8 +93,8 @@ class Datasets(torch.utils.data.Dataset):
         # # GaussianBlur and resize
         # for heatmap_index in range(len(heatmaps_label)):
         #     heatmap = heatmaps_label[heatmap_index]
-        gaussian_kernel = (55, 55)
-        heatmap = cv2.GaussianBlur(empty_heatmap_original_size, gaussian_kernel, 0, 0)
+        gaussian_kernel = (25, 25)
+        heatmap = cv2.GaussianBlur(empty_heatmap_original_size, gaussian_kernel, 1, 0)
         heatmap_amax = np.max(heatmap)
         if heatmap_amax != 0:
             heatmap /= heatmap_amax / 255

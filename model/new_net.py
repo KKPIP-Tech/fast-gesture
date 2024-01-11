@@ -110,8 +110,8 @@ class DetectHead(nn.Module):
                 nn.Conv2d(16, 8, kernel_size=(1, 1), padding=0),
                 nn.ReLU(inplace=True),
                 nn.Conv2d(8, 1, kernel_size=(1, 1), padding=0),
-                nn.ReLU(inplace=True),
-                # nn.Sigmoid()
+                # nn.ReLU(inplace=True),
+                nn.Sigmoid()
             )
             self.heads.append(head)
     def forward(self, x):
@@ -166,15 +166,15 @@ class U_Net(nn.Module):
         
         # Down Sample
         R1 = self.DownConv1(x)            # [BatchSize, 32, 320, 320]
-        # R1 = self.mlp1(R1)
+        R1 = self.mlp1(R1)
         R2 = self.DownConv2(self.DownSample1(R1))  # [BatchSize, 64, 160, 160]
-        # R2 = self.mlp2(R2)
+        R2 = self.mlp2(R2)
         R3 = self.DownConv3(self.DownSample2(R2))  # [BatchSize, 128, 80, 80]
-        # R3 = self.mlp3(R3)
+        R3 = self.mlp3(R3)
         R4 = self.DownConv4(self.DownSample3(R3))  # [BatchSize, 256, 40, 40]
-        # R4 = self.mlp4(R4)
+        R4 = self.mlp4(R4)
         R5 = self.DownConv5(self.DownSample4(R4))  # [BatchSize, 512, 20, 20]
-        # R5 = self.mlp5(R5)
+        R5 = self.mlp5(R5)
         R6 = self.DownConv6(self.DownSample5(R5))  # [BatchSize, 512, 10, 10]
         
         R6 = self.conv_layer(R6)  # [BatchSize, 512, 20, 20]
@@ -196,7 +196,7 @@ class U_Net(nn.Module):
     
     
 if __name__ == "__main__":
-    net = U_Net(detect_num=21).to('cpu')
-    summary(net,  input_size=(3, 320, 320), batch_size=-1)
+    net = U_Net(detect_num=1).to('cpu')
+    summary(net,  input_size=(3, 320, 320), batch_size=-1, device='cpu')
                 
 

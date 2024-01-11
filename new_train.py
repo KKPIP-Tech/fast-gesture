@@ -100,8 +100,8 @@ def train(opt, save_path):
             images = images.to(device)
             heatmaps_label = heatmaps_label.to(device)
             
-            # print(f"heatmaps label max {np.max(heatmaps_label[0][1].detach().cpu().numpy().astype(np.float32)*255)}")
-            # cv2.imshow("heatmap label", heatmaps_label[0][1].detach().cpu().numpy().astype(np.float32)*255)
+            # print(f"heatmaps label max {np.max(heatmaps_label[0][0].detach().cpu().numpy().astype(np.float32)*255)}")
+            # cv2.imshow("heatmap label", heatmaps_label[0][0].detach().cpu().numpy().astype(np.float32)*255)
             # cv2.waitKey()
             
             forward = model(images)
@@ -112,7 +112,7 @@ def train(opt, save_path):
                 # print(f"Label Shape[{ni}]", label[:,ni,...].shape)
                 # print(f"Forward Shape[{ni}]", forward[ni].shape)
                 # 选择批次中的第一个图像，并去除批次大小维度
-                image_to_show = forward[ni].squeeze(0).cpu().detach().numpy().astype(np.float32)
+                image_to_show = forward[ni][0].cpu().detach().numpy().astype(np.float32)
 
                 # 确保图像是单通道的，尺寸为 (320, 320)
                 image_to_show = image_to_show[0, :, :]
@@ -148,10 +148,13 @@ def train(opt, save_path):
                 gpu_memory_bytes = torch.cuda.max_memory_reserved(device)
                 # 将字节转换为GB
                 gpu_memory_GB = round(gpu_memory_bytes / 1024 / 1024 / 1024, 2)
-                pbar.set_description(f"Epoch {epoch}, GPU_Mem {gpu_memory_GB} GiB, avg_loss {avg_loss}, min_loss {min_loss}, max_loss {max_loss}")
+                pbar.set_description(f"Epoch {epoch}, GPU_Mem {gpu_memory_GB} GiB, avg_loss {avg_loss}")
             else:
                 pbar.set_description(f"Epoch {epoch}, avg_loss {avg_loss}")
-            
+                
+        print(f"[Epoch {epoch}] | -> avg_loss: {avg_loss:.4f}, min_loss: {min_loss:.4f}, max_loss: {max_loss:.4f}")
+        torch.save(model.state_dict(), save_path + f'/model_epoch_{epoch}.pt')
+        print()
 
 def run(opt):
     # Create
@@ -161,13 +164,13 @@ def run(opt):
 
 if __name__ == "__main__":
     parse = argparse.ArgumentParser()
-    parse.add_argument('--device', type=str, default='mps', help='cuda or cpu or mps')
+    parse.add_argument('--device', type=str, default='cuda', help='cuda or cpu or mps')
     parse.add_argument('--batch_size', type=int, default=1, help='batch size')
-    parse.add_argument('--img_size', type=int, default=320, help='trian img size')
-    parse.add_argument('--epochs', type=int, default=300, help='max train epoch')
+    parse.add_argument('--img_size', type=int, default=640, help='trian img size')
+    parse.add_argument('--epochs', type=int, default=1000, help='max train epoch')
     parse.add_argument('--data', type=str,default='./data', help='datasets config path')
     parse.add_argument('--save_period', type=int, default=4, help='save per n epoch')
-    parse.add_argument('--workers', type=int, default=16, help='thread num to load data')
+    parse.add_argument('--workers', type=int, default=6, help='thread num to load data')
     parse.add_argument('--shuffle', action='store_false', help='chose to unable shuffle in Dataloader')
     parse.add_argument('--save_path', type=str, default='./run/train/')
     parse.add_argument('--save_name', type=str, default='exp')
