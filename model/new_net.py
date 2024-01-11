@@ -47,7 +47,7 @@ class DownSample(nn.Module):
 
         self.Down = nn.Sequential(
             nn.Conv2d(in_channels, in_channels, 3, 2, 1),
-            nn.LeakyReLU()
+            nn.ReLU()
         )
     
     def forward(self, x):
@@ -106,11 +106,12 @@ class DetectHead(nn.Module):
         for _ in range(head_nums):
             head = nn.Sequential(
                 nn.Conv2d(32, 16, kernel_size=(1, 1), padding=0),
-                nn.LeakyReLU(inplace=True),
+                nn.ReLU(inplace=True),
                 nn.Conv2d(16, 8, kernel_size=(1, 1), padding=0),
-                nn.LeakyReLU(inplace=True),
+                nn.ReLU(inplace=True),
                 nn.Conv2d(8, 1, kernel_size=(1, 1), padding=0),
-                torch.nn.Sigmoid()
+                nn.ReLU(inplace=True),
+                # nn.Sigmoid()
             )
             self.heads.append(head)
     def forward(self, x):
@@ -135,10 +136,19 @@ class U_Net(nn.Module):
         self.DownConv4 = Conv(128, 256)
         self.DownSample4 = DownSample(256)
         self.DownConv5 = Conv(256, 512)
+        self.DownSample5 = DownSample(512)
+        self.DownConv6 = Conv(512, 1024)
 
-        self.conv_layer = DepthwiseSeparableConv(512, 512)
-        self.mlp = MLP(512)
+        self.conv_layer = DepthwiseSeparableConv(1024, 1024)
+        self.mlp1 = MLP(32)
+        self.mlp2 = MLP(64)
+        self.mlp3 = MLP(128)
+        self.mlp4 = MLP(256)
+        self.mlp5 = MLP(512)
+        self.mlp6 = MLP(1024)
         
+        self.UpSample2 = UpSample(1024)
+        self.UpConv1 = Conv(1024, 512)
         self.UpSample3 = UpSample(512)
         self.UpConv2 = Conv(512, 256)
         self.UpSample4 = UpSample(256)
@@ -148,7 +158,6 @@ class U_Net(nn.Module):
         self.UpSample6 = UpSample(64)
         self.UpConv5 = Conv(64, 32)
 
-
         # 最后一层
         # self.conv = nn.Conv2d(32, 9, kernel_size=(1, 1), padding=0)
         self.head = DetectHead(head_nums=detect_num)
@@ -157,22 +166,24 @@ class U_Net(nn.Module):
         
         # Down Sample
         R1 = self.DownConv1(x)            # [BatchSize, 32, 320, 320]
+        # R1 = self.mlp1(R1)
         R2 = self.DownConv2(self.DownSample1(R1))  # [BatchSize, 64, 160, 160]
+        # R2 = self.mlp2(R2)
         R3 = self.DownConv3(self.DownSample2(R2))  # [BatchSize, 128, 80, 80]
+        # R3 = self.mlp3(R3)
         R4 = self.DownConv4(self.DownSample3(R3))  # [BatchSize, 256, 40, 40]
+        # R4 = self.mlp4(R4)
         R5 = self.DownConv5(self.DownSample4(R4))  # [BatchSize, 512, 20, 20]
-        # R6 = self.C6(self.D5(R5))  # [BatchSize, 512, 10, 10]
+        # R5 = self.mlp5(R5)
+        R6 = self.DownConv6(self.DownSample5(R5))  # [BatchSize, 512, 10, 10]
         
-        
-        R5 = self.conv_layer(R5)  # [BatchSize, 512, 20, 20]
-        R5 = self.conv_layer(R5)  # [BatchSize, 512, 20, 20]
-        R5 = self.conv_layer(R5)  # [BatchSize, 512, 20, 20]
+        R6 = self.conv_layer(R6)  # [BatchSize, 512, 20, 20]
         
         # 应用MLP模块
-        R5 = self.mlp(R5)
+        R6 = self.mlp6(R6)
 
-        # O2 = self.C9(self.U2(R6, R5))  # [BatchSize, 512, 40, 40]
-        O3 = self.UpConv2(self.UpSample3(R5, R4))  # [BatchSize, 256, 40, 40]
+        O2 = self.UpConv1(self.UpSample2(R6, R5))  # [BatchSize, 512, 40, 40]
+        O3 = self.UpConv2(self.UpSample3(O2, R4))  # [BatchSize, 256, 40, 40]
         O4 = self.UpConv3(self.UpSample4(O3, R3))  # [BatchSize, 128, 80, 80]
         O5 = self.UpConv4(self.UpSample5(O4, R2))  # [BatchSize, 64, 160, 160]
         a = self.UpConv5(self.UpSample6(O5, R1))  # [BatchSize, 32, 320, 320]
@@ -186,6 +197,6 @@ class U_Net(nn.Module):
     
 if __name__ == "__main__":
     net = U_Net(detect_num=21).to('cpu')
-    summary(net,  input_size=(3, 640, 640), batch_size=-1)
+    summary(net,  input_size=(3, 320, 320), batch_size=-1)
                 
 

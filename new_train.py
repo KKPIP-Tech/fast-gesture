@@ -34,7 +34,7 @@ def select_optim(net:U_Net, opt, user_set_optim:str=None):
         optimizer = optim.AdamW(net.parameters(), lr=opt.lr)
     elif user_set_optim == "SGD":
         optimizer = optim.SGD(net.parameters(), lr=opt.lr)
-    elif user_set_optim == "":
+    elif user_set_optim == "ASGD":
         optimizer = optim.ASGD(net.parameters(), lr=opt.lr)
     else:
         print(f"Your Input Setting Optimizer {user_set_optim} is Not In [Adam, AdamW, SGD, ASGD]")
@@ -77,8 +77,8 @@ def train(opt, save_path):
     )
     
     # init model
-    kc = datasets.get_kc()
-    model = U_Net(detect_num=kc).to(device=device)
+    # kc = datasets.get_kc()
+    model = U_Net(detect_num=1).to(device=device)
     
     loss_F = torch.nn.MSELoss()
     loss_F.to(device=device)
@@ -100,12 +100,30 @@ def train(opt, save_path):
             images = images.to(device)
             heatmaps_label = heatmaps_label.to(device)
             
+            # print(f"heatmaps label max {np.max(heatmaps_label[0][1].detach().cpu().numpy().astype(np.float32)*255)}")
+            # cv2.imshow("heatmap label", heatmaps_label[0][1].detach().cpu().numpy().astype(np.float32)*255)
+            # cv2.waitKey()
+            
             forward = model(images)
             loss = 0
-            for ni in range(kc):  # ni: names index
+            
+            for ni in range(1):  # ni: names index
                 # print("Label NI", label[:,ni,...].mean())
                 # print(f"Label Shape[{ni}]", label[:,ni,...].shape)
                 # print(f"Forward Shape[{ni}]", forward[ni].shape)
+                # 选择批次中的第一个图像，并去除批次大小维度
+                image_to_show = forward[ni].squeeze(0).cpu().detach().numpy().astype(np.float32)
+
+                # 确保图像是单通道的，尺寸为 (320, 320)
+                image_to_show = image_to_show[0, :, :]
+
+                # 转换数据类型并调整像素值范围
+                # image_to_show = (image_to_show).astype(np.uint8)
+
+                # 显示图像
+                cv2.imshow("Forward", image_to_show)
+                cv2.waitKey(1) # 等待按键事件
+                # cv2.waitKey(0)
                 loss += loss_F(forward[ni], heatmaps_label[:,ni,...].unsqueeze(1))
             
             # loss = loss_F(forward, label)  # 计算损失
@@ -134,8 +152,6 @@ def train(opt, save_path):
             else:
                 pbar.set_description(f"Epoch {epoch}, avg_loss {avg_loss}")
             
-    
-    
 
 def run(opt):
     # Create
@@ -151,7 +167,7 @@ if __name__ == "__main__":
     parse.add_argument('--epochs', type=int, default=300, help='max train epoch')
     parse.add_argument('--data', type=str,default='./data', help='datasets config path')
     parse.add_argument('--save_period', type=int, default=4, help='save per n epoch')
-    parse.add_argument('--workers', type=int, default=1, help='thread num to load data')
+    parse.add_argument('--workers', type=int, default=16, help='thread num to load data')
     parse.add_argument('--shuffle', action='store_false', help='chose to unable shuffle in Dataloader')
     parse.add_argument('--save_path', type=str, default='./run/train/')
     parse.add_argument('--save_name', type=str, default='exp')
