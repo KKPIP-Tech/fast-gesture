@@ -42,7 +42,7 @@ class Datasets(torch.utils.data.Dataset):
         self.datapack = self.load_data(
             names=self.namse, 
             datasets_path=self.datasets_path,
-            limit=None)
+            limit=20)
     
     def __getitem__(self, index):
         start_time = time()
@@ -115,8 +115,11 @@ class Datasets(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.datapack)
     
-    def get_max_hand_num (self) -> int:
+    def get_max_hand_num(self) -> int:
         return self.max_hand_num
+    
+    def get_kc(self) -> int:
+        return self.kc
     
     @staticmethod
     def load_data(names, datasets_path, limit:int = None):

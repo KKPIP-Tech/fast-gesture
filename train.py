@@ -45,15 +45,9 @@ def select_optim(net:HandGestureNet, opt, user_set_optim:str=None):
         print(f"Use Default Optimizer Adam")
         optimizer = optim.Adam(net.parameters(), lr=opt.lr)
     return optimizer
-     
 
 
-def train(opt, save_path):
-    data_json = opt.data
-    print(f"save_path: {save_path}")
-    print(f"Datasets Config File Root Path: {data_json}")
-    log_file = save_path + "/record.log"
-    
+def select_device(opt):
     # set device
     user_set_device = opt.device
     if user_set_device == 'cpu':
@@ -64,7 +58,17 @@ def train(opt, save_path):
         device = user_set_device if torch.backends.mps.is_available() else 'cpu'
     else:
         print(f" Your Device Setting: {user_set_device} is not support!")
+        device = 'cpu'
+    return device
     
+
+def train(opt, save_path):
+    data_json = opt.data
+    print(f"save_path: {save_path}")
+    print(f"Datasets Config File Root Path: {data_json}")
+    log_file = save_path + "/record.log"
+    
+    device = select_device(opt=opt)
     print(f"Device: {device}")
 
     # set datasets
@@ -78,11 +82,13 @@ def train(opt, save_path):
     
     # 初始化网络
     max_hand_num = datasets.get_max_hand_num()
+    kc = datasets.get_kc()
     net = HandGestureNet(max_hand_num=max_hand_num, device=device)
     net.to(device=device)
 
     # 损失函数
-    keypoints_loss = nn.MSELoss().to(device=device)
+    keypoints_x_loss = nn.MSELoss().to(device=device)
+    keypoints_y_loss = nn.MSELoss().to(device=device)
     gestures_loss = nn.L1Loss().to(device=device)
     
     # 优化器
@@ -109,29 +115,29 @@ def train(opt, save_path):
             gesture_values, keypoints_outputs = net(images)
 
             # 修正损失计算
-            loss_g = 0.0
-            loss_k = 0.0
+            loss_gesture = 0.0
+            loss_keypoint_x = 0.0
+            loss_keypoint_y = 0.0
 
             # class_labels shape: [batch_size, max_hand_num, 1]
             # keypoints_label shape: [batch_size, max_hand_num, kc, 2]
             # print(f"pred_gesture: \n{gesture_values}")  
             # print(f"label_gesture: \n{class_labels}")
-            # 手势识别损失
-            # class_labels = class_labels.view(-1)  # 将手势标签扁平化
-            # print(f"keypoints_label shape: {keypoints_label.shape}")
-            # gesture_values = gesture_values.view(-1, gesture_values.size(-1))  # 调整形状以匹配标签
-            loss_g = gestures_loss(gesture_values, class_labels)
 
+            for hi in range(max_hand_num):
+                loss_gesture += gestures_loss(gesture_values.squeeze(0)[hi][0], class_labels.squeeze(0)[hi][0])
+            
             # # print()
             # print(f"pred_keypoints: \n{keypoints_outputs}") 
             # print(f"label_keypoints: \n{keypoints_label}")
+            for hi in range(max_hand_num):
+                for li in range(kc):
+                    loss_keypoint_x += keypoints_x_loss(keypoints_outputs.squeeze(0)[hi][li][0], keypoints_label.squeeze(0)[hi][li][0])
+                    loss_keypoint_y += keypoints_y_loss(keypoints_outputs.squeeze(0)[hi][li][1], keypoints_label.squeeze(0)[hi][li][1])
             
-            # 关键点检测损失
-            # keypoints_label = keypoints_label.view(-1, keypoints_label.shape[-3], keypoints_label.shape[-2], keypoints_label.shape[-1])  # 调整关键点标签的形状
-            # keypoints_outputs = keypoints_outputs.view(-1, keypoints_outputs.shape[-2], keypoints_outputs.shape[-1])  # 确保输出形状正确
-            loss_k = keypoints_loss(keypoints_outputs, keypoints_label)
+            # loss_k = keypoints_loss(keypoints_outputs, keypoints_label)
             
-            loss = loss_g + loss_k
+            loss = loss_gesture + loss_keypoint_x + loss_keypoint_y
             
             # loss_g.backward()
             loss.backward()
@@ -169,7 +175,7 @@ def run(opt):
 
 if __name__ == "__main__":
     parse = argparse.ArgumentParser()
-    parse.add_argument('--device', type=str, default='cuda', help='cuda or cpu or mps')
+    parse.add_argument('--device', type=str, default='mps', help='cuda or cpu or mps')
     parse.add_argument('--batch_size', type=int, default=1, help='batch size')
     parse.add_argument('--img_size', type=int, default=320, help='trian img size')
     parse.add_argument('--epochs', type=int, default=300, help='max train epoch')
