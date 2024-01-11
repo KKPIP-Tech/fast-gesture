@@ -90,7 +90,7 @@ class UNet(nn.Module):
     def __init__(self):
         super(UNet, self).__init__()
         # 下采样层
-        self.down1 = UNetBlock(3, 32, down=True, use_dropout=False)
+        self.down1· = UNetBlock(3, 32, down=True, use_dropout=False)
         self.down2 = UNetBlock(32, 64, down=True, use_dropout=False)
         self.down3 = UNetBlock(64, 128, down=True, use_dropout=False)
         self.down4 = UNetBlock(128, 256, down=True, use_dropout=True)

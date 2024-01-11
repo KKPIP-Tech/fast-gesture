@@ -3,25 +3,24 @@ import yaml
 import sys
 import cv2
 import json
-import random
+from time import time
 import numpy as np
-from time import time, sleep
 from pathlib import Path
 
-sys.path.append(Path(__file__).parent.parent.absolute().__str__()) 
+sys.path.append(Path(__file__).parent.parent.absolute().__str__())
 
-import torch 
+import torch
 import torch.utils.data
-from torch import _nnpack_available
-from torchvision import datasets, transforms, models
+from torchvision import transforms
 
 from utils.augment import letterbox
 
+
 class Datasets(torch.utils.data.Dataset):
-    def __init__(self, dataset_conf, img_size) -> None:
+    def __init__(self, config_file, img_size):
         
-        yaml_file = dataset_conf + '/config.yaml'
-        print(f"Config File: {yaml_file}")
+        config_file = config_file + "/config.yaml"
+        print(f"Datasets Config File: {config_file}")
         
         if isinstance(img_size, int):
             self.height, self.width = img_size, img_size
@@ -29,135 +28,120 @@ class Datasets(torch.utils.data.Dataset):
             self.height, self.width = img_size
         else:
             raise ValueError("img_size is not int or list")
-        
-        with open(yaml_file) as file:
+
+        # Load Datasets Config ---------
+        with open(config_file) as file:
             config = yaml.safe_load(file)
-        
-        datasets_root = config['root']
-        datasets_resolution = config['resolution']
-        names = config['names']
-        self.names = names
+            
+        self.datasets_path = config['root']
+        self.namse = config['names']
         self.nc = int(config['nc'])
         self.kc = int(config['kc'])
         
-        self.kernel_size = config['kernel_size']
-        self.sigma_x = config['sigma_x']
-        self.sigma_y = config['sigma_y']
-        
         self.max_hand_num = config['max_hand_num']
-        # self.max_hand_num += 1
-        
-        print(f"names: {names}")
-        
-        images_path = []
-        for name in names:
-            search_images_path = datasets_root + '/' + name + '/images/'
-            search_labels_path = datasets_root + '/' + name + '/labels/'
-            cnt = 0
-            for datapack in os.walk(search_images_path):
-                for filename in datapack[2]:
-                    image_path = search_images_path + filename
-                    label_path = search_labels_path + filename.replace(".jpg", ".json")
-                    images_path.append([image_path, label_path, names.index(name)])
-                    # cnt += 1
-                    # if cnt == 5:
-                    #     break
-        self.images_path = images_path
-        
+        self.datapack = self.load_data(
+            names=self.namse, 
+            datasets_path=self.datasets_path,
+            limit=None)
+    
     def __getitem__(self, index):
-        st = time()
-        while True:
-            # 图像的路径，图像及其标签的路径，类别索引
-            image_path, label_path, name_index = self.images_path[index]
-            
-            # 图像处理 --------------
-            original_image = cv2.imread(image_path)
-            image_height, image_width = original_image.shape[:2]
-            letterbox_image, scale_ratio, left_padding, top_padding = letterbox(
-                image=original_image,
-                target_shape=[self.height, self.width],
-                fill_color=(114, 114, 114)
-            )
-            
-            # cv2.imshow("letterbox image", letterbox_image)
-            
-            # Labels 处理 ------------
-            with open(label_path) as label_content:
-                json_data = json.load(label_content)
-            if len(json_data) == 0  :
-                # 如果 json label 当中没有任何数据
-                while True:
-                    random_int = random.randint(
-                        (index - len(self.images_path)),
-                        (len(self.images_path) - index)
-                    )
-                    temp_index = index + random_int
-                    if 0 < temp_index < len(self.images_path):
-                        index += random_int
-                        break
-                continue
-            
-            # 原始的遮罩
-            zero_image = np.zeros((image_height, image_width))
-            
-            # 按照手的最大数量填充 object_labels 和 type_labels 以确保在多 Workers 和多 Batch Size 时不会出现尺寸错误的问题
-            # object_labels = [[np.zeros((self.height, self.width)) for _ in range(self.kc)] for _ in range(self.max_hand_num)]  # 每个手的关键点及手势类别数据为一个元素
-            
-            object_labels = [[np.asarray([0.0, 0.0]).copy() for _ in range(self.kc)] for _ in range(self.max_hand_num)]
-            type_labels = [[np.asarray(1)] for _ in range(self.max_hand_num)]  # 其索引值对应 object_labels 当中的元素位置，用于存储对应手的手势类别
-            
-            hand_cnt = 0
-            for one_hand_data in json_data:
-                # 处理单个手的数据
-                heatmaps = [zero_image.copy() for _ in range(self.kc)]  # 跟据关键点的总数生成对应数量的 heatmap
+        # get image path, lebel path, name index
+        img_path, leb_path, ni = self.datapack[index]
+        
+        # image process ---------------------
+        original_img = cv2.imread(img_path)
+        original_height, original_width = original_img.shape[:2]
+        resize_img = cv2.resize(original_img, (self.width, self.height), cv2.INTER_AREA)
+        
+        # labels process --------------------
+        with open(leb_path) as label_file:
+            leb_json = json.load(label_file)
+        
+        # Keypoints Label Shape [kc, self.height, self.width]
+        empty_heatmap_original_size = np.zeros((original_height, original_width))
+        heatmaps_label = [
+            empty_heatmap_original_size.copy() for _ in range(self.kc)
+        ]
+        
+        # load process data
+        for single_hand_data in leb_json:
+            points_json = single_hand_data['points']
+            for keypoint in points_json:
+                key_index = int(keypoint['id'])
+                x = float(keypoint['x'])
+                x = x if 0 <= x <= 1 else 1
+                y = float(keypoint['y'])
+                y = y if 0 <= y <= 1 else 1
+                target_index_heatmap = heatmaps_label[key_index]
                 
-                keypoint_label = [np.asarray([0.0, 0.0]).copy() for _ in range(self.kc)]
+                int_x = int(original_width * x - 1)
+                int_x = int_x if int_x <= (original_width - 1) else original_width - 1
+                int_y = int(original_height * y - 1)
+                int_y = int_y if int_y <= (original_height - 1) else original_height -1 
                 
-                # # Left: 0; Right: 1
-                # hand_label = 0 if one_hand_data['hand_label'] == "Left" else 1 
+                target_index_heatmap[int_y][int_x] = 255  # height, width
+                heatmaps_label[key_index] = target_index_heatmap
                 
-                key_points = one_hand_data['points']
-                
-                for keypoint in key_points:
-                    # 处理单个点的数据
-                    heatmaps_index = int(keypoint['id'])
-                    x = float(keypoint['x'])
-                    x = x if 0 <= x <= 1 else 1
-                    y = float(keypoint['y'])
-                    y = y if 0 <= y <= 1 else 1
-                    float_x = x*self.width-1+left_padding
-                    float_x = float_x if float_x < (self.width - 1) else self.width - 1
-                    float_y = y*self.height-1+top_padding
-                    float_y = float_y if float_y < (self.height - 1) else self.height - 1
-                    
-                    
-                    
-                    keypoint_label[heatmaps_index] = np.asarray([
-                        float((float_x/self.width*2)-1),
-                        float((float_x/self.height*2)-1)
-                    ])
-                    
+        # GaussianBlur and resize
+        for heatmap_index in range(len(heatmaps_label)):
+            heatmap = heatmaps_label[heatmap_index]
+            gaussian_kernel = (55, 55)
+            heatmap = cv2.GaussianBlur(heatmap, gaussian_kernel, 0, 0)
+            heatmap_amax = np.amax(heatmap)
+            if heatmap_amax != 0:
+                heatmap /= heatmap_amax / 255
+            heatmap /= 255.0
+            resize_heatmap = cv2.resize(heatmap, (self.width, self.height), cv2.INTER_AREA)
+            # cv2.imshow("resize heatmap", resize_heatmap)
+            # cv2.waitKey()
+            heatmaps_label[heatmap_index] = resize_heatmap
+        
+        # convert data to tensor -------------
+        tensor_img = transforms.ToTensor()(resize_img)
+        tensor_heatmap_label = torch.tensor(np.asarray(heatmaps_label), dtype=torch.float32)
 
-                
-                if hand_cnt < self.max_hand_num:
-                    object_labels[hand_cnt] = keypoint_label
-                    type_labels[hand_cnt] = [np.asarray(name_index)]
-                    hand_cnt += 1
-                    if hand_cnt == self.max_hand_num:
-                        break
-                else:
-                    break
-            break         
-        
-        # print(f"object_labels length in datasets: {len(object_labels)}")
-        
-        letterbox_image = transforms.ToTensor()(letterbox_image)
-        object_labels = torch.tensor(np.array(object_labels), dtype=torch.float32)
-        type_labels = torch.tensor(np.array(type_labels), dtype=torch.float32)
-        # print(f"Dataset Upload Time: {time() - st}")
-        return letterbox_image, object_labels, type_labels
-        
+        return tensor_img, tensor_heatmap_label
+
     def __len__(self):
-        return len(self.images_path)
-
-
+        return len(self.datapack)
+    
+    def get_max_hand_num(self) -> int:
+        return self.max_hand_num
+    
+    def get_kc(self) -> int:
+        return self.kc
+    
+    @staticmethod
+    def load_data(names, datasets_path, limit:int = None):
+        # Load All Images Path, Labels Path and name index
+        datapack: list = []  # [[img, leb, name_index]...]
+        search_path: list = []
+        
+        names_length = len(names) + 1
+        
+        for name in names:
+            # get all search dir by name index
+            target_image_path = datasets_path + '/' + name + '/images/'
+            target_label_path = datasets_path + '/' + name + '/labels/'
+            search_path.append([target_image_path, target_label_path, name])
+        
+        for target_image_path, target_label_path, name in search_path:
+            index_count:int = 0
+            for path_pack in os.walk(target_image_path):
+                for filename in path_pack[2]:
+                    img = target_image_path + filename
+                    label_name = filename.replace(".jpg", ".json")
+                    leb = target_label_path + label_name
+                    name_index = names.index(name) / names_length
+                    
+                    datapack.append(
+                        [img, leb, name_index]
+                    )
+                    index_count += 1
+                    if limit is None:
+                        continue
+                    if index_count < limit:
+                        continue
+                    break
+        
+        return datapack
