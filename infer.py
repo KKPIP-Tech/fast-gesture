@@ -11,22 +11,22 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 net = HandGestureNet(max_hand_num=5, device=device)
 # 加载模型
 # net = HandGestureNet(max_hand_num=您的最大手部数量)  # 创建模型实例
-net.load_state_dict(torch.load("run/train/exp_4/model_epoch_1.pt"))  # 加载模型文件
+net.load_state_dict(torch.load("run/train/exp/model_epoch_0.pt"))  # 加载模型文件
 net.to(device)
 net.eval()
 
 names = ["one", "two", "five", "hold", "pickup"]
 names_length = len(names) + 1
 
-# capture = cv2.VideoCapture(0)
+capture = cv2.VideoCapture(0)
 
 while True:
 # 读取图像并进行预处理
     st = time()
-    # ret, image = capture.read()
-    # if not ret:
-    #     continue
-    image = cv2.imread("101.jpg")
+    ret, image = capture.read()
+    if not ret:
+        continue
+    # image = cv2.imread("101.jpg")
     image = cv2.resize(image, (320, 320))  # 假设模型输入为256x256
     image_tensor = transforms.ToTensor()(image).unsqueeze(0).to(device)
 

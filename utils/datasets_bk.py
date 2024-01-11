@@ -42,7 +42,7 @@ class Datasets(torch.utils.data.Dataset):
         self.datapack = self.load_data(
             names=self.namse, 
             datasets_path=self.datasets_path,
-            limit=20)
+            limit=None)
     
     def __getitem__(self, index):
         start_time = time()
