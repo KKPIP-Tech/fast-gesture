@@ -9,7 +9,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 
 from tqdm import tqdm
-from model.new_net import U_Net
+from model.new_net import FastGesture
 from utils.datasets import Datasets
 
 
@@ -27,7 +27,7 @@ def create_path(path):
         suffix += 1
 
 
-def select_optim(net:U_Net, opt, user_set_optim:str=None):
+def select_optim(net, opt, user_set_optim:str=None):
     if user_set_optim == "Adam":
         optimizer = optim.Adam(net.parameters(), lr=opt.lr)
     elif user_set_optim == "AdamW":
@@ -77,8 +77,8 @@ def train(opt, save_path):
     )
     
     # init model
-    # kc = datasets.get_kc()
-    model = U_Net(detect_num=1).to(device=device)
+    kc = datasets.get_kc()
+    model = FastGesture(detect_num=(kc + 1)).to(device=device)
     
     loss_F = torch.nn.MSELoss()
     loss_F.to(device=device)
@@ -107,7 +107,7 @@ def train(opt, save_path):
             forward = model(images)
             loss = 0
             
-            for ni in range(1):  # ni: names index
+            for ni in range(kc+1):  # ni: names index
                 # print("Label NI", label[:,ni,...].mean())
                 # print(f"Label Shape[{ni}]", label[:,ni,...].shape)
                 # print(f"Forward Shape[{ni}]", forward[ni].shape)
@@ -164,7 +164,7 @@ def run(opt):
 
 if __name__ == "__main__":
     parse = argparse.ArgumentParser()
-    parse.add_argument('--device', type=str, default='cuda', help='cuda or cpu or mps')
+    parse.add_argument('--device', type=str, default='mps', help='cuda or cpu or mps')
     parse.add_argument('--batch_size', type=int, default=1, help='batch size')
     parse.add_argument('--img_size', type=int, default=640, help='trian img size')
     parse.add_argument('--epochs', type=int, default=1000, help='max train epoch')
@@ -181,3 +181,4 @@ if __name__ == "__main__":
     parse = parse.parse_args()
 
     run(opt=parse)
+    

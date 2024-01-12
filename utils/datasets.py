@@ -51,13 +51,11 @@ class Datasets(torch.utils.data.Dataset):
         # image process ---------------------
         original_img = cv2.imread(img_path)
         original_height, original_width = original_img.shape[:2]
-        # medianBlur_img = cv2.medianBlur(original_img, 5)
+        
+        # canny, drawContours 
         grey_img = cv2.cvtColor(original_img.copy(), cv2.COLOR_BGR2GRAY)
-        # gaussian_kernel = (5, 5)
-        # GaussianBlur_img = cv2.GaussianBlur(grey_img, gaussian_kernel, 0, 0)
-        # t,binary = cv2.threshold(grey_img,100,255, cv2.THRESH_BINARY)
-        thresh = cv2.Canny(grey_img, 0, 80, 50)
-        contours,hierarchy = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        canny_img = cv2.Canny(grey_img, 0, 80, 50)
+        contours, hierarchy = cv2.findContours(canny_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         cv2.drawContours(original_img,contours,-1,(0,0,255),2) 
         resize_img = cv2.resize(original_img, (self.width, self.height), cv2.INTER_AREA)
         
@@ -70,48 +68,61 @@ class Datasets(torch.utils.data.Dataset):
         
         # Keypoints Label Shape [kc, self.height, self.width]
         empty_heatmap_original_size = np.zeros((original_height, original_width))
-                
+        heatmaps_label = [
+            empty_heatmap_original_size.copy() for _ in range(self.kc + 1)
+        ] 
+        '''
+        kc + 1 是因为需要在 heatmaps_label 最后添加一张绘制了所有的点的 heatmap。
+        heatmaps_label 除最后一张之外，从索引 0 到索引 20 分别对应了关键点的类别。
+        除最后一张之外，每一张 heatmap 对应一类关键点。
+        '''
+        
         # load process data
+        # draw all keypoints in the last heatmap of heatmaps_label
         for single_hand_data in leb_json:
             points_json = single_hand_data['points']
             for keypoint in points_json:
-                # key_index = int(keypoint['id'])
+                key_index = int(keypoint['id'])
                 x = float(keypoint['x'])
                 x = x if 0 <= x <= 1 else 1
                 y = float(keypoint['y'])
                 y = y if 0 <= y <= 1 else 1
-                # target_index_heatmap = heatmaps_label[key_index]
+                target_allkp_heatmap = heatmaps_label[-1]  # 该 heatmap 有所有的关键点
+                target_index_heatmap = heatmaps_label[key_index]  # 该 heatmap 只有该类关键点
                 
                 int_x = int(original_width * x - 1)
                 int_x = int_x if int_x <= (original_width - 1) else original_width - 1
                 int_y = int(original_height * y - 1)
                 int_y = int_y if int_y <= (original_height - 1) else original_height -1 
                 
-                empty_heatmap_original_size[int_y][int_x] = 255  # height, width
-                # heatmaps_label[key_index] = target_index_heatmap
+                target_allkp_heatmap[int_y][int_x] = 255  # height, width
+                target_index_heatmap[int_y][int_x] = 255  # height, width
+                
+                heatmaps_label[-1] = target_allkp_heatmap
+                heatmaps_label[key_index] = target_index_heatmap
                 
         # # GaussianBlur and resize
-        # for heatmap_index in range(len(heatmaps_label)):
-        #     heatmap = heatmaps_label[heatmap_index]
-        gaussian_kernel = (25, 25)
-        heatmap = cv2.GaussianBlur(empty_heatmap_original_size, gaussian_kernel, 1, 0)
-        heatmap_amax = np.max(heatmap)
-        if heatmap_amax != 0:
-            heatmap /= heatmap_amax / 255
-        heatmap_amax = np.max(heatmap)
-        # heatmap /= 255
-        resize_heatmap = cv2.resize(heatmap, (self.width, self.height), cv2.INTER_AREA)
+        for heatmap_index in range(len(heatmaps_label)):
+            heatmap = heatmaps_label[heatmap_index]
+            gaussian_kernel = (25, 25)
+            heatmap = cv2.GaussianBlur(empty_heatmap_original_size, gaussian_kernel, 1, 0)
+            heatmap_amax = np.max(heatmap)
+            if heatmap_amax != 0:
+                heatmap /= heatmap_amax / 255
+            heatmap_amax = np.max(heatmap)
+            # heatmap /= 255
+            resize_heatmap = cv2.resize(heatmap, (self.width, self.height), cv2.INTER_AREA)
             # cv2.imshow("resize heatmap", resize_heatmap)
             # cv2.waitKey()
             # print(resize_heatmap.shape)
-            # heatmaps_label[heatmap_index] = resize_heatmap
+            heatmaps_label[heatmap_index] = resize_heatmap
         
         # print(np.max(heatmaps_label[0]))
         # cv2.imshow("resize heatmap", heatmaps_label[0])
         # cv2.waitKey()
         # # convert data to tensor -------------
         tensor_img = transforms.ToTensor()(resize_img)
-        tensor_heatmap_label = torch.tensor(np.array([resize_heatmap]), dtype=torch.float32)
+        tensor_heatmap_label = torch.tensor(np.array(heatmaps_label), dtype=torch.float32)
 
         return tensor_img, tensor_heatmap_label
 
