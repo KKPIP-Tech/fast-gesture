@@ -219,10 +219,10 @@ class FastGesture(nn.Module):
         unet_feature = self.unet(x)  # 特征提取
         
         print(f"unet feature: {len(unet_feature)}")
-        keypoint_maps = unet_feature[:-1]  # 取出前21个热图
+        # keypoint_maps = unet_feature[:-1]  # 取出前21个热图
 
         # 从每个热图中提取关键点位置
-        keypoint_positions = [self.extract_keypoints(map) for map in keypoint_maps]
+        # keypoint_positions = [self.extract_keypoints(map) for map in keypoint_maps]
         
         
 
@@ -235,6 +235,7 @@ class FastGesture(nn.Module):
         # print(classified_keypoints.shape)
 
         # return unet_feature, classified_keypoints, keypoint_positions
+        return unet_feature
 
     @staticmethod
     def extract_keypoints(heatmap, threshold=120):
