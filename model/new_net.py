@@ -203,68 +203,69 @@ class MLPUNET(nn.Module):
 
 
 class FastGesture(nn.Module):
-    def __init__(self, detect_num:int=22) -> None:
+    def __init__(self, detect_num:int=22, max_hand_num:int=2) -> None:
         super(FastGesture, self).__init__()
         self.unet = MLPUNET(detect_num=detect_num)
-        # 分类模块
-        self.classifier = nn.Sequential(
-            nn.Conv2d(3 + detect_num - 1, 64, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(64, 128, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(128, detect_num - 1, kernel_size=1)  # 输出每个关键点的分类
-        )
+        self.max_hand_num = max_hand_num
+
+        # 添加额外的处理层
+        self.bbox_layer = nn.Conv2d(detect_num, 4, kernel_size=1)  # 用于提取手势的识别框
+        self.classification_layer = nn.Conv2d(detect_num, 1, kernel_size=1)  # 用于手势类别识别
 
     def forward(self, x):
-        unet_feature = self.unet(x)  # 特征提取
-        
-        print(f"unet feature: {len(unet_feature)}")
-        # keypoint_maps = unet_feature[:-1]  # 取出前21个热图
+        batch_size = x.shape[0]
+        heatmaps = self.unet(x)
 
-        # 从每个热图中提取关键点位置
-        # keypoint_positions = [self.extract_keypoints(map) for map in keypoint_maps]
-        
-        
+        # 假设heatmaps的最后一个元素是最终的特征图
+        last_heatmap = heatmaps[-1]  # 取最后一个heatmap，假设其形状为 [batch, channels, height, width]
 
-        # # 结合原图和关键点信息
-        # combined = torch.cat([x] + keypoint_maps, dim=1)
+        # 提取手势识别框
+        bboxes = self.bbox_layer(last_heatmap)  # [batch, 4, height, width]
+        bboxes = bboxes.permute(0, 2, 3, 1)  # [batch, height, width, 4]
+        bboxes = bboxes.contiguous().view(batch_size, -1, 4)  # [batch, height*width, 4]
 
-        # # 对每个关键点进行分类
-        # classified_keypoints = self.classifier(combined)
-        
-        # print(classified_keypoints.shape)
+        # 提取手势类别
+        classifications = self.classification_layer(last_heatmap)  # [batch, 1, height, width]
+        classifications = classifications.squeeze(1)  # [batch, height, width]
+        classifications = classifications.view(batch_size, -1)  # [batch, height*width]
 
-        # return unet_feature, classified_keypoints, keypoint_positions
-        return unet_feature
+        # 关键点提取
+        keypoints = self.extract_keypoints(heatmaps, batch_size)
 
-    @staticmethod
-    def extract_keypoints(heatmap, threshold=120):
+        # 构建最终的输出
+        final_output = {
+            "bboxes": bboxes,
+            "classifications": classifications,
+            "keypoints": keypoints
+        }
+        return heatmaps, final_output
+    
+    def extract_keypoints(self, heatmaps, batch_size):
         """
-        从热图中提取关键点位置。使用非极大值抑制（NMS）来识别局部最大值。
+        提取关键点的位置。
+        :param heatmaps: 输入的特征图 [detect_num, batch, height, width]
+        :param batch_size: 批次大小
+        :return: 关键点的坐标列表
         """
-        
-        print(f"heatmap.size: {heatmap.size()}")
-        b, _, h, w = heatmap.size()
+        keypoints = []
+        for heatmap in heatmaps:
+            # 应用3x3最大池化来找到关键点，保留边缘
+            pooled_heatmaps = F.max_pool2d(heatmap, kernel_size=3, stride=1, padding=1)
+            # 找到最大值点，即关键点位置
+            keypoints_mask = (heatmap == pooled_heatmaps)
 
-        # # 应用阈值
-        # heatmap = heatmap * (heatmap > threshold).float()
+            # 对于每个batch中的每张heatmap，提取关键点位置
+            for b in range(batch_size):
+                keypoint_coords = torch.nonzero(keypoints_mask[b], as_tuple=False)
+                # 将关键点坐标归一化
+                normalized_keypoints = keypoint_coords.float() / torch.tensor([heatmap.shape[2], heatmap.shape[3]])
+                keypoints.append(normalized_keypoints)
 
-        # # 执行NMS
-        # pool = F.max_pool2d(heatmap, kernel_size=3, stride=1, padding=1)
-        # heatmap = heatmap * (heatmap == pool).float()
+        # 将所有batch的关键点坐标汇总到一个列表中
+        keypoints = torch.cat(keypoints, dim=0)
+        return keypoints
 
-        # # 提取关键点位置
-        # keypoints = []
-        # for batch in range(b):
-        #     keypoint = []
-        #     for y in range(h):
-        #         for x in range(w):
-        #             if heatmap[batch, 0, y, x] > 0:
-        #                 keypoint.append((x, y))
-        #     keypoints.append(keypoint)
-
-        # return keypoints
     
 if __name__ == "__main__":
-    net = FastGesture(detect_num=22).to('cpu')
-    summary(net,  input_size=(3, 320, 320), batch_size=8, device='cpu')
+    net = MLPUNET(detect_num=22).to('cpu')
+    summary(net,  input_size=(3, 320, 320), batch_size=1, device='cpu')

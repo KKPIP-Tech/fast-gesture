@@ -95,36 +95,40 @@ def train(opt, save_path):
         max_loss = 10
         pbar = tqdm(dataloader, desc=f"[Epoch {epoch} ->]")
         for index, datapack in enumerate(pbar):
-            images, heatmaps_label = datapack
+            images, heatmaps_label, bbox_gesture_label= datapack
             
             images = images.to(device)
             heatmaps_label = heatmaps_label.to(device)
+            bbox_gesture_label = bbox_gesture_label.to(device)
             
             # print(f"heatmaps label max {np.max(heatmaps_label[0][0].detach().cpu().numpy().astype(np.float32)*255)}")
             # cv2.imshow("heatmap label", heatmaps_label[0][0].detach().cpu().numpy().astype(np.float32)*255)
             # cv2.waitKey()
             
-            forward = model(images)
+            forward_heatmaps, foward_final_output = model(images)
             loss = 0
+            
+        
             
             for ni in range(kc+1):  # ni: names index
                 # print("Label NI", label[:,ni,...].mean())
                 # print(f"Label Shape[{ni}]", label[:,ni,...].shape)
                 # print(f"Forward Shape[{ni}]", forward[ni].shape)
                 # 选择批次中的第一个图像，并去除批次大小维度
-                image_to_show = forward[ni][0].cpu().detach().numpy().astype(np.float32)
+                image_to_show = forward_heatmaps[ni][0].cpu().detach().numpy().astype(np.float32)
 
                 # 确保图像是单通道的，尺寸为 (320, 320)
                 image_to_show = image_to_show[0, :, :]
 
                 # 转换数据类型并调整像素值范围
                 # image_to_show = (image_to_show).astype(np.uint8)
-
+                print("MAX: ", np.max(image_to_show))
                 # 显示图像
-                cv2.imshow("Forward", image_to_show)
-                cv2.waitKey(1) # 等待按键事件
+                # image_to_show = cv2.resize(image_to_show, (200, 200))
+                # cv2.imshow(f"Forward {ni}", image_to_show)
+                # cv2.waitKey(1) # 等待按键事件
                 # cv2.waitKey(0)
-                loss += loss_F(forward[ni], heatmaps_label[:,ni,...].unsqueeze(1))
+                loss += loss_F(forward_heatmaps[ni], heatmaps_label[:,ni,...].unsqueeze(1))
             
             # loss = loss_F(forward, label)  # 计算损失
             optimizer.zero_grad()  # 因为每次反向传播的时候，变量里面的梯度都要清零
@@ -164,8 +168,8 @@ def run(opt):
 
 if __name__ == "__main__":
     parse = argparse.ArgumentParser()
-    parse.add_argument('--device', type=str, default='mps', help='cuda or cpu or mps')
-    parse.add_argument('--batch_size', type=int, default=1, help='batch size')
+    parse.add_argument('--device', type=str, default='cuda', help='cuda or cpu or mps')
+    parse.add_argument('--batch_size', type=int, default=2, help='batch size')
     parse.add_argument('--img_size', type=int, default=640, help='trian img size')
     parse.add_argument('--epochs', type=int, default=1000, help='max train epoch')
     parse.add_argument('--data', type=str,default='./data', help='datasets config path')
@@ -173,7 +177,7 @@ if __name__ == "__main__":
     parse.add_argument('--workers', type=int, default=6, help='thread num to load data')
     parse.add_argument('--shuffle', action='store_false', help='chose to unable shuffle in Dataloader')
     parse.add_argument('--save_path', type=str, default='./run/train/')
-    parse.add_argument('--save_name', type=str, default='exp')
+    parse.add_argument('--save_name', type=str, default='exp_new')
     parse.add_argument('--lr', type=float, default=0.001)
     parse.add_argument('--optimizer', type=str, default='Adam', help='only support: [Adam, AdamW, SGD, ASGD]')
     # parse.add_argument('--loss', type=str, default='MSELoss', help='[MSELoss]')

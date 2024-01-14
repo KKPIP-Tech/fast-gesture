@@ -71,6 +71,13 @@ class Datasets(torch.utils.data.Dataset):
         heatmaps_label = [
             empty_heatmap_original_size.copy() for _ in range(self.kc + 1)
         ] 
+        
+        # Gesture and boxx label [hand_num, 5] id, cx, cy, w, h
+        empty_gesture_bbox = np.array([1.0, 0.0, 0.0, 0.0, 0.0])
+        gesture_bbox_label = [
+            empty_gesture_bbox.copy() for _ in range(self.max_hand_num)
+        ]
+        
         '''
         kc + 1 是因为需要在 heatmaps_label 最后添加一张绘制了所有的点的 heatmap。
         heatmaps_label 除最后一张之外，从索引 0 到索引 20 分别对应了关键点的类别。
@@ -79,8 +86,11 @@ class Datasets(torch.utils.data.Dataset):
         
         # load process data
         # draw all keypoints in the last heatmap of heatmaps_label
+        hand_count = 0
         for single_hand_data in leb_json:
             points_json = single_hand_data['points']
+            x_cache = []
+            y_cache = []
             for keypoint in points_json:
                 key_index = int(keypoint['id'])
                 x = float(keypoint['x'])
@@ -90,6 +100,9 @@ class Datasets(torch.utils.data.Dataset):
                 target_allkp_heatmap = heatmaps_label[-1]  # 该 heatmap 有所有的关键点
                 target_index_heatmap = heatmaps_label[key_index]  # 该 heatmap 只有该类关键点
                 
+                x_cache.append(x)
+                y_cache.append(y)
+                
                 int_x = int(original_width * x - 1)
                 int_x = int_x if int_x <= (original_width - 1) else original_width - 1
                 int_y = int(original_height * y - 1)
@@ -97,15 +110,32 @@ class Datasets(torch.utils.data.Dataset):
                 
                 target_allkp_heatmap[int_y][int_x] = 255  # height, width
                 target_index_heatmap[int_y][int_x] = 255  # height, width
-                
+
                 heatmaps_label[-1] = target_allkp_heatmap
                 heatmaps_label[key_index] = target_index_heatmap
-                
+            
+            # get cx, cy, w, h
+            max_x = max(x_cache)
+            min_x = min(x_cache)
+            max_y = max(y_cache)
+            min_y = min(y_cache)
+            
+            w = max_x - min_x
+            h = max_y - min_y
+            cx = w/2 + min_x
+            cy = h/2 + min_y
+            single_hand_bbox_label = [ni, cx, cy, w, h]
+            gesture_bbox_label[hand_count] = np.array(single_hand_bbox_label)
+            hand_count += 0
+            if hand_count < self.max_hand_num:
+                continue
+            break
+                   
         # # GaussianBlur and resize
         for heatmap_index in range(len(heatmaps_label)):
             heatmap = heatmaps_label[heatmap_index]
             gaussian_kernel = (25, 25)
-            heatmap = cv2.GaussianBlur(empty_heatmap_original_size, gaussian_kernel, 1, 0)
+            heatmap = cv2.GaussianBlur(heatmap, gaussian_kernel, 1, 0)
             heatmap_amax = np.max(heatmap)
             if heatmap_amax != 0:
                 heatmap /= heatmap_amax / 255
@@ -117,14 +147,12 @@ class Datasets(torch.utils.data.Dataset):
             # print(resize_heatmap.shape)
             heatmaps_label[heatmap_index] = resize_heatmap
         
-        # print(np.max(heatmaps_label[0]))
-        # cv2.imshow("resize heatmap", heatmaps_label[0])
-        # cv2.waitKey()
         # # convert data to tensor -------------
         tensor_img = transforms.ToTensor()(resize_img)
         tensor_heatmap_label = torch.tensor(np.array(heatmaps_label), dtype=torch.float32)
+        tensor_bbox_label = torch.tensor(np.array(gesture_bbox_label), dtype=torch.float32)
 
-        return tensor_img, tensor_heatmap_label
+        return tensor_img, tensor_heatmap_label, tensor_bbox_label
 
     def __len__(self):
         return len(self.datapack)
@@ -169,3 +197,4 @@ class Datasets(torch.utils.data.Dataset):
                     break
         
         return datapack
+    
