@@ -144,6 +144,40 @@ class SPPF(nn.Module):
         return x
 
 
+class ChannelAttention(nn.Module):
+    def __init__(self, in_channels, ratio=8):
+        super(ChannelAttention, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.max_pool = nn.AdaptiveMaxPool2d(1)
+        self.fc = nn.Sequential(
+            nn.Conv2d(in_channels, in_channels // ratio, 1, bias=False),
+            nn.ReLU(),
+            nn.Conv2d(in_channels // ratio, in_channels, 1, bias=False)
+        )
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        avg_out = self.fc(self.avg_pool(x))
+        max_out = self.fc(self.max_pool(x))
+        out = avg_out + max_out
+        return self.sigmoid(out)
+
+
+class SpatialAttention(nn.Module):
+    def __init__(self, kernel_size=7):
+        super(SpatialAttention, self).__init__()
+        self.conv1 = nn.Conv2d(2, 1, kernel_size, padding=kernel_size//2, bias=False)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        avg_out = torch.mean(x, dim=1, keepdim=True)
+        max_out, _ = torch.max(x, dim=1, keepdim=True)
+        x = torch.cat([avg_out, max_out], dim=1)
+        x = self.conv1(x)
+        return self.sigmoid(x)
+
+
+
 class MLPUNET(nn.Module):
     def __init__(self, detect_num=22):  # 只是定义网络中需要用到的方法
         super(MLPUNET, self).__init__()
@@ -165,6 +199,11 @@ class MLPUNET(nn.Module):
         self.sppf = SPPF(64)
 
         self.conv_layer = DepthwiseSeparableConv(64, 64)
+        
+        # 通道注意力和空间注意力
+        self.ca = ChannelAttention(64)
+        self.sa = SpatialAttention()
+        
         self.mlp1 = MLP(4)
         self.mlp2 = MLP(8)
         self.mlp3 = MLP(16)
@@ -208,7 +247,12 @@ class MLPUNET(nn.Module):
         R5 = self.conv_layer(R5)
         R5 = self.conv_layer(R5)
         R5 = self.conv_layer(R5)  # [BatchSize, 512, 20, 20]
-        R5 = self.mlp5(R5)
+        
+        # 使用注意力机制
+        R5 = self.ca(R5) * R5
+        attention_R5 = self.sa(R5) * R5
+        
+        R5 = self.mlp5(attention_R5)
         # 应用MLP模块
         # R6 = self.mlp6(R6)
 
@@ -223,6 +267,9 @@ class MLPUNET(nn.Module):
         output = self.head(a)  # 输出两张 Heatmap
 
         return output
+
+
+
 
 
 class FastGesture(nn.Module):
