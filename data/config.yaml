@@ -17,7 +17,7 @@ nc: 5  # names count
 
 names: ["one", "two", "five", "hold", "pickup"]
 
-kc: 21  # keypoints count
+kc: 7  # keypoints count
 
 kernel_size: [25, 25]
 sigma_x: 0

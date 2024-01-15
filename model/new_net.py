@@ -104,18 +104,18 @@ class DepthwiseSeparableConv(nn.Module):
 
 
 class DetectHead(nn.Module):
-    def __init__(self,head_nums) -> None:
+    def __init__(self,head_nums, in_channles=32) -> None:
         super(DetectHead, self).__init__()
 
         self.heads = nn.ModuleList()
         
         for _ in range(head_nums):
             head = nn.Sequential(
-                nn.Conv2d(32, 16, kernel_size=(1, 1), padding=0),
+                nn.Conv2d(in_channles, in_channles//2, kernel_size=(1, 1), padding=0),
                 nn.ReLU(inplace=True),
-                nn.Conv2d(16, 8, kernel_size=(1, 1), padding=0),
+                nn.Conv2d(in_channles//2, in_channles//4, kernel_size=(1, 1), padding=0),
                 nn.ReLU(inplace=True),
-                nn.Conv2d(8, 1, kernel_size=(1, 1), padding=0),
+                nn.Conv2d(in_channles//4, 1, kernel_size=(1, 1), padding=0),
                 # nn.ReLU(inplace=True),
                 nn.Sigmoid()
             )
@@ -127,45 +127,65 @@ class DetectHead(nn.Module):
         return heatmaps
 
 
+class SPPF(nn.Module):
+    def __init__(self, in_channels):
+        super(SPPF, self).__init__()
+        self.pool1 = nn.MaxPool2d(kernel_size=5, stride=1, padding=2)
+        self.pool2 = nn.MaxPool2d(kernel_size=9, stride=1, padding=4)
+        self.pool3 = nn.MaxPool2d(kernel_size=13, stride=1, padding=6)
+        self.conv = nn.Conv2d(in_channels * 4, in_channels, kernel_size=1)
+
+    def forward(self, x):
+        x1 = self.pool1(x)
+        x2 = self.pool2(x)
+        x3 = self.pool3(x)
+        x = torch.cat([x, x1, x2, x3], dim=1)
+        x = self.conv(x)
+        return x
+
+
 class MLPUNET(nn.Module):
     def __init__(self, detect_num=22):  # 只是定义网络中需要用到的方法
         super(MLPUNET, self).__init__()
 
         # 下采样
-        self.DownConv1 = Conv(3, 32)
-        self.DownSample1 = DownSample(32)
-        self.DownConv2 = Conv(32, 64)
-        self.DownSample2 = DownSample(64)
-        self.DownConv3 = Conv(64, 128)
-        self.DownSample3 = DownSample(128)
-        self.DownConv4 = Conv(128, 256)
-        # self.DownSample4 = DownSample(256)
-        # self.DownConv5 = Conv(256, 512)
+        self.DownConv1 = Conv(3, 4)
+        self.DownSample1 = DownSample(4)
+        self.DownConv2 = Conv(4, 8)
+        self.DownSample2 = DownSample(8)
+        self.DownConv3 = Conv(8, 16)
+        self.DownSample3 = DownSample(16)
+        self.DownConv4 = Conv(16, 32)
+        self.DownSample4 = DownSample(32)
+        self.DownConv5 = Conv(32, 64)
         # self.DownSample5 = DownSample(512)
         # self.DownConv6 = Conv(512, 1024)
+        
+        # 添加 SPPF 层
+        self.sppf = SPPF(64)
 
-        self.conv_layer = DepthwiseSeparableConv(256, 256)
-        self.mlp1 = MLP(32)
-        self.mlp2 = MLP(64)
-        self.mlp3 = MLP(128)
-        self.mlp4 = MLP(256)
-        # self.mlp5 = MLP(512)
+        self.conv_layer = DepthwiseSeparableConv(64, 64)
+        self.mlp1 = MLP(4)
+        self.mlp2 = MLP(8)
+        self.mlp3 = MLP(16)
+        self.mlp4 = MLP(32)
+        self.mlp5 = MLP(64)
         # self.mlp6 = MLP(1024)
         
         # self.UpSample2 = UpSample(1024)
         # self.UpConv1 = Conv(1024, 512)
-        # self.UpSample3 = UpSample(512)
-        # self.UpConv2 = Conv(512, 256)
-        self.UpSample4 = UpSample(256)
-        self.UpConv3 = Conv(256, 128)
-        self.UpSample5 = UpSample(128)
-        self.UpConv4 = Conv(128, 64)
-        self.UpSample6 = UpSample(64)
-        self.UpConv5 = Conv(64, 32)
+        self.UpSample3 = UpSample(64)
+        self.UpConv2 = Conv(64, 32)
+        self.UpSample4 = UpSample(32)
+        self.UpConv3 = Conv(32, 16)
+        self.UpSample5 = UpSample(16)
+        self.UpConv4 = Conv(16, 8)
+        self.UpSample6 = UpSample(8)
+        self.UpConv5 = Conv(8, 4)
 
         # 最后一层
         # self.conv = nn.Conv2d(32, 9, kernel_size=(1, 1), padding=0)
-        self.head = DetectHead(head_nums=detect_num)
+        self.head = DetectHead(head_nums=detect_num, in_channles=4)
 
     def forward(self, x):
         
@@ -177,21 +197,24 @@ class MLPUNET(nn.Module):
         R3 = self.DownConv3(self.DownSample2(R2))  # [BatchSize, 128, 80, 80]
         R3 = self.mlp3(R3)
         R4 = self.DownConv4(self.DownSample3(R3))  # [BatchSize, 256, 40, 40]
-        # R4 = self.mlp4(R4)
-        # R5 = self.DownConv5(self.DownSample4(R4))  # [BatchSize, 512, 20, 20]
+        R4 = self.mlp4(R4)
+        R5 = self.DownConv5(self.DownSample4(R4))  # [BatchSize, 512, 20, 20]
         # R5 = self.mlp5(R5)
         # R6 = self.DownConv6(self.DownSample5(R5))  # [BatchSize, 512, 10, 10]
         
-        R4 = self.conv_layer(R4)
-        R4 = self.conv_layer(R4)
-        R4 = self.conv_layer(R4)  # [BatchSize, 512, 20, 20]
-        R4 = self.mlp4(R4)
+        # 使用 SPPF 层
+        R5 = self.sppf(R5)
+        
+        R5 = self.conv_layer(R5)
+        R5 = self.conv_layer(R5)
+        R5 = self.conv_layer(R5)  # [BatchSize, 512, 20, 20]
+        R5 = self.mlp5(R5)
         # 应用MLP模块
         # R6 = self.mlp6(R6)
 
         # O2 = self.UpConv1(self.UpSample2(R6, R5))  # [BatchSize, 512, 40, 40]
-        # O3 = self.UpConv2(self.UpSample3(R5, R4))  # [BatchSize, 256, 40, 40]
-        O4 = self.UpConv3(self.UpSample4(R4, R3))  # [BatchSize, 128, 80, 80]
+        O3 = self.UpConv2(self.UpSample3(R5, R4))  # [BatchSize, 256, 40, 40]
+        O4 = self.UpConv3(self.UpSample4(O3, R3))  # [BatchSize, 128, 80, 80]
         O5 = self.UpConv4(self.UpSample5(O4, R2))  # [BatchSize, 64, 160, 160]
         a = self.UpConv5(self.UpSample6(O5, R1))  # [BatchSize, 32, 320, 320]
         # print(a.shape)

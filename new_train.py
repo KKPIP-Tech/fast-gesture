@@ -9,7 +9,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 
 from tqdm import tqdm
-from model.new_net import FastGesture
+from model.new_net import FastGesture, MLPUNET
 from utils.datasets import Datasets
 
 
@@ -78,7 +78,7 @@ def train(opt, save_path):
     
     # init model
     kc = datasets.get_kc()
-    model = FastGesture(detect_num=(kc + 1)).to(device=device)
+    model = MLPUNET(detect_num=(kc + 1)).to(device=device)
     
     loss_F = torch.nn.MSELoss()
     loss_F.to(device=device)
@@ -86,7 +86,6 @@ def train(opt, save_path):
     # 优化器
     user_set_optim = opt.optimizer
     optimizer = select_optim(net=model, opt=opt, user_set_optim=user_set_optim)
-    
     
     for epoch in range(opt.epochs):
         model.train()
@@ -99,30 +98,28 @@ def train(opt, save_path):
             
             images = images.to(device)
             heatmaps_label = heatmaps_label.to(device)
-            bbox_gesture_label = bbox_gesture_label.to(device)
+            # bbox_gesture_label = bbox_gesture_label.to(device)
             
             # print(f"heatmaps label max {np.max(heatmaps_label[0][0].detach().cpu().numpy().astype(np.float32)*255)}")
             # cv2.imshow("heatmap label", heatmaps_label[0][0].detach().cpu().numpy().astype(np.float32)*255)
             # cv2.waitKey()
             
-            forward_heatmaps, foward_final_output = model(images)
+            forward_heatmaps = model(images)
             loss = 0
-            
-        
             
             for ni in range(kc+1):  # ni: names index
                 # print("Label NI", label[:,ni,...].mean())
                 # print(f"Label Shape[{ni}]", label[:,ni,...].shape)
                 # print(f"Forward Shape[{ni}]", forward[ni].shape)
                 # 选择批次中的第一个图像，并去除批次大小维度
-                image_to_show = forward_heatmaps[ni][0].cpu().detach().numpy().astype(np.float32)
+                # image_to_show = forward_heatmaps[ni][0].cpu().detach().numpy().astype(np.float32)
 
-                # 确保图像是单通道的，尺寸为 (320, 320)
-                image_to_show = image_to_show[0, :, :]
+                # # 确保图像是单通道的，尺寸为 (320, 320)
+                # image_to_show = image_to_show[0, :, :]
 
-                # 转换数据类型并调整像素值范围
-                # image_to_show = (image_to_show).astype(np.uint8)
-                print("MAX: ", np.max(image_to_show))
+                # # 转换数据类型并调整像素值范围
+                # # image_to_show = (image_to_show).astype(np.uint8)
+                # print("MAX: ", np.max(image_to_show))
                 # 显示图像
                 # image_to_show = cv2.resize(image_to_show, (200, 200))
                 # cv2.imshow(f"Forward {ni}", image_to_show)
@@ -168,9 +165,9 @@ def run(opt):
 
 if __name__ == "__main__":
     parse = argparse.ArgumentParser()
-    parse.add_argument('--device', type=str, default='cuda', help='cuda or cpu or mps')
-    parse.add_argument('--batch_size', type=int, default=2, help='batch size')
-    parse.add_argument('--img_size', type=int, default=640, help='trian img size')
+    parse.add_argument('--device', type=str, default='mps', help='cuda or cpu or mps')
+    parse.add_argument('--batch_size', type=int, default=1, help='batch size')
+    parse.add_argument('--img_size', type=int, default=320, help='trian img size')
     parse.add_argument('--epochs', type=int, default=1000, help='max train epoch')
     parse.add_argument('--data', type=str,default='./data', help='datasets config path')
     parse.add_argument('--save_period', type=int, default=4, help='save per n epoch')
