@@ -139,23 +139,23 @@ class MLPUNET(nn.Module):
         self.DownConv3 = Conv(64, 128)
         self.DownSample3 = DownSample(128)
         self.DownConv4 = Conv(128, 256)
-        self.DownSample4 = DownSample(256)
-        self.DownConv5 = Conv(256, 512)
+        # self.DownSample4 = DownSample(256)
+        # self.DownConv5 = Conv(256, 512)
         # self.DownSample5 = DownSample(512)
         # self.DownConv6 = Conv(512, 1024)
 
-        self.conv_layer = DepthwiseSeparableConv(512, 512)
+        self.conv_layer = DepthwiseSeparableConv(256, 256)
         self.mlp1 = MLP(32)
         self.mlp2 = MLP(64)
         self.mlp3 = MLP(128)
         self.mlp4 = MLP(256)
-        self.mlp5 = MLP(512)
+        # self.mlp5 = MLP(512)
         # self.mlp6 = MLP(1024)
         
         # self.UpSample2 = UpSample(1024)
         # self.UpConv1 = Conv(1024, 512)
-        self.UpSample3 = UpSample(512)
-        self.UpConv2 = Conv(512, 256)
+        # self.UpSample3 = UpSample(512)
+        # self.UpConv2 = Conv(512, 256)
         self.UpSample4 = UpSample(256)
         self.UpConv3 = Conv(256, 128)
         self.UpSample5 = UpSample(128)
@@ -177,21 +177,21 @@ class MLPUNET(nn.Module):
         R3 = self.DownConv3(self.DownSample2(R2))  # [BatchSize, 128, 80, 80]
         R3 = self.mlp3(R3)
         R4 = self.DownConv4(self.DownSample3(R3))  # [BatchSize, 256, 40, 40]
-        R4 = self.mlp4(R4)
-        R5 = self.DownConv5(self.DownSample4(R4))  # [BatchSize, 512, 20, 20]
+        # R4 = self.mlp4(R4)
+        # R5 = self.DownConv5(self.DownSample4(R4))  # [BatchSize, 512, 20, 20]
         # R5 = self.mlp5(R5)
         # R6 = self.DownConv6(self.DownSample5(R5))  # [BatchSize, 512, 10, 10]
         
-        R5 = self.conv_layer(R5)
-        R5 = self.conv_layer(R5)
-        R5 = self.conv_layer(R5)  # [BatchSize, 512, 20, 20]
-        R5 = self.mlp5(R5)
+        R4 = self.conv_layer(R4)
+        R4 = self.conv_layer(R4)
+        R4 = self.conv_layer(R4)  # [BatchSize, 512, 20, 20]
+        R4 = self.mlp4(R4)
         # 应用MLP模块
         # R6 = self.mlp6(R6)
 
         # O2 = self.UpConv1(self.UpSample2(R6, R5))  # [BatchSize, 512, 40, 40]
-        O3 = self.UpConv2(self.UpSample3(R5, R4))  # [BatchSize, 256, 40, 40]
-        O4 = self.UpConv3(self.UpSample4(O3, R3))  # [BatchSize, 128, 80, 80]
+        # O3 = self.UpConv2(self.UpSample3(R5, R4))  # [BatchSize, 256, 40, 40]
+        O4 = self.UpConv3(self.UpSample4(R4, R3))  # [BatchSize, 128, 80, 80]
         O5 = self.UpConv4(self.UpSample5(O4, R2))  # [BatchSize, 64, 160, 160]
         a = self.UpConv5(self.UpSample6(O5, R1))  # [BatchSize, 32, 320, 320]
         # print(a.shape)
