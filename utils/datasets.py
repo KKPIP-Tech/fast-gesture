@@ -53,11 +53,11 @@ class Datasets(torch.utils.data.Dataset):
         original_height, original_width = original_img.shape[:2]
         
         # canny, drawContours
-        resize_img = cv2.resize(original_img, (self.width, self.height), cv2.INTER_AREA) 
-        grey_img = cv2.cvtColor(resize_img.copy(), cv2.COLOR_BGR2GRAY)
+        grey_img = cv2.cvtColor(original_img.copy(), cv2.COLOR_BGR2GRAY)
         canny_img = cv2.Canny(grey_img, 0, 100, 80)
         contours, hierarchy = cv2.findContours(canny_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        cv2.drawContours(resize_img,contours,-1,(0,0,255),1) 
+        cv2.drawContours(original_img,contours,-1,(0,0,255),2) 
+        resize_img = cv2.resize(original_img, (self.width, self.height), cv2.INTER_AREA) 
         
         # cv2.imshow("Canny_image", resize_img)
         # cv2.waitKey(1)
@@ -92,10 +92,10 @@ class Datasets(torch.utils.data.Dataset):
             x_cache = []
             y_cache = []
             for keypoint in points_json:
-                id = int(keypoint['id'])
-                key_index = self.get_keypoints_index(id=id)
-                if key_index is None:
-                    continue
+                key_index = int(keypoint['id'])
+                # key_index = self.get_keypoints_index(id=id)
+                # if key_index is None:
+                #     continue
                 
                 x = float(keypoint['x'])
                 x = x if 0 <= x <= 1 else 1

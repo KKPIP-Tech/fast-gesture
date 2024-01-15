@@ -183,48 +183,48 @@ class MLPUNET(nn.Module):
         super(MLPUNET, self).__init__()
 
         # 下采样
-        self.DownConv1 = Conv(3, 4)
-        self.DownSample1 = DownSample(4)
-        self.DownConv2 = Conv(4, 8)
-        self.DownSample2 = DownSample(8)
-        self.DownConv3 = Conv(8, 16)
-        self.DownSample3 = DownSample(16)
-        self.DownConv4 = Conv(16, 32)
-        self.DownSample4 = DownSample(32)
-        self.DownConv5 = Conv(32, 64)
+        self.DownConv1 = Conv(3, 16)
+        self.DownSample1 = DownSample(16)
+        self.DownConv2 = Conv(16, 32)
+        self.DownSample2 = DownSample(32)
+        self.DownConv3 = Conv(32, 64)
+        self.DownSample3 = DownSample(64)
+        self.DownConv4 = Conv(64, 128)
+        self.DownSample4 = DownSample(128)
+        self.DownConv5 = Conv(128, 256)
         # self.DownSample5 = DownSample(512)
         # self.DownConv6 = Conv(512, 1024)
         
         # 添加 SPPF 层
-        self.sppf = SPPF(64)
+        self.sppf = SPPF(256)
 
-        self.conv_layer = DepthwiseSeparableConv(64, 64)
+        self.conv_layer = DepthwiseSeparableConv(256, 256)
         
         # 通道注意力和空间注意力
-        self.ca = ChannelAttention(64)
+        self.ca = ChannelAttention(32)
         self.sa = SpatialAttention()
         
-        self.mlp1 = MLP(4)
-        self.mlp2 = MLP(8)
-        self.mlp3 = MLP(16)
-        self.mlp4 = MLP(32)
-        self.mlp5 = MLP(64)
+        self.mlp1 = MLP(16)
+        self.mlp2 = MLP(32)
+        self.mlp3 = MLP(64)
+        self.mlp4 = MLP(128)
+        self.mlp5 = MLP(256)
         # self.mlp6 = MLP(1024)
         
         # self.UpSample2 = UpSample(1024)
         # self.UpConv1 = Conv(1024, 512)
-        self.UpSample3 = UpSample(64)
-        self.UpConv2 = Conv(64, 32)
-        self.UpSample4 = UpSample(32)
-        self.UpConv3 = Conv(32, 16)
-        self.UpSample5 = UpSample(16)
-        self.UpConv4 = Conv(16, 8)
-        self.UpSample6 = UpSample(8)
-        self.UpConv5 = Conv(8, 4)
+        self.UpSample3 = UpSample(256)
+        self.UpConv2 = Conv(256, 128)
+        self.UpSample4 = UpSample(128)
+        self.UpConv3 = Conv(128, 64)
+        self.UpSample5 = UpSample(64)
+        self.UpConv4 = Conv(64, 32)
+        self.UpSample6 = UpSample(32)
+        self.UpConv5 = Conv(32, 16)
 
         # 最后一层
         # self.conv = nn.Conv2d(32, 9, kernel_size=(1, 1), padding=0)
-        self.head = DetectHead(head_nums=detect_num, in_channles=4)
+        self.head = DetectHead(head_nums=detect_num, in_channles=16)
 
     def forward(self, x):
         
@@ -232,6 +232,8 @@ class MLPUNET(nn.Module):
         R1 = self.DownConv1(x)            # [BatchSize, 32, 320, 320]
         R1 = self.mlp1(R1)
         R2 = self.DownConv2(self.DownSample1(R1))  # [BatchSize, 64, 160, 160]
+        R2 = self.ca(R2) * R2
+        R2 = self.sa(R2) * R2
         R2 = self.mlp2(R2)
         R3 = self.DownConv3(self.DownSample2(R2))  # [BatchSize, 128, 80, 80]
         R3 = self.mlp3(R3)
@@ -242,17 +244,16 @@ class MLPUNET(nn.Module):
         # R6 = self.DownConv6(self.DownSample5(R5))  # [BatchSize, 512, 10, 10]
         
         # 使用 SPPF 层
-        R5 = self.sppf(R5)
         
         R5 = self.conv_layer(R5)
         R5 = self.conv_layer(R5)
         R5 = self.conv_layer(R5)  # [BatchSize, 512, 20, 20]
         
         # 使用注意力机制
-        R5 = self.ca(R5) * R5
-        attention_R5 = self.sa(R5) * R5
         
-        R5 = self.mlp5(attention_R5)
+        # R5 = self.sppf(R5)
+        R5 = self.mlp5(R5)
+        
         # 应用MLP模块
         # R6 = self.mlp6(R6)
 
@@ -267,8 +268,6 @@ class MLPUNET(nn.Module):
         output = self.head(a)  # 输出两张 Heatmap
 
         return output
-
-
 
 
 

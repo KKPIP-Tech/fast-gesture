@@ -9,7 +9,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 
 from tqdm import tqdm
-from model.new_net import FastGesture, MLPUNET
+from model.new_net import MLPUNET
 from utils.datasets import Datasets
 
 
@@ -87,6 +87,7 @@ def train(opt, save_path):
     user_set_optim = opt.optimizer
     optimizer = select_optim(net=model, opt=opt, user_set_optim=user_set_optim)
     
+    
     for epoch in range(opt.epochs):
         model.train()
         total_loss = 0.0
@@ -107,23 +108,25 @@ def train(opt, save_path):
             forward_heatmaps = model(images)
             loss = 0
             
+        
+            
             for ni in range(kc+1):  # ni: names index
                 # print("Label NI", label[:,ni,...].mean())
                 # print(f"Label Shape[{ni}]", label[:,ni,...].shape)
                 # print(f"Forward Shape[{ni}]", forward[ni].shape)
                 # 选择批次中的第一个图像，并去除批次大小维度
-                # image_to_show = forward_heatmaps[ni][0].cpu().detach().numpy().astype(np.float32)
+                image_to_show = forward_heatmaps[ni][0].cpu().detach().numpy().astype(np.float32)
 
-                # # 确保图像是单通道的，尺寸为 (320, 320)
-                # image_to_show = image_to_show[0, :, :]
+                # 确保图像是单通道的，尺寸为 (320, 320)
+                image_to_show = image_to_show[0, :, :]
 
-                # # 转换数据类型并调整像素值范围
-                # # image_to_show = (image_to_show).astype(np.uint8)
+                # 转换数据类型并调整像素值范围
+                # image_to_show = (image_to_show).astype(np.uint8)
                 # print("MAX: ", np.max(image_to_show))
                 # 显示图像
-                # image_to_show = cv2.resize(image_to_show, (200, 200))
-                # cv2.imshow(f"Forward {ni}", image_to_show)
-                # cv2.waitKey(1) # 等待按键事件
+                image_to_show = cv2.resize(image_to_show, (200, 200))
+                cv2.imshow(f"Forward {ni}", image_to_show)
+                cv2.waitKey(1) # 等待按键事件
                 # cv2.waitKey(0)
                 loss += loss_F(forward_heatmaps[ni], heatmaps_label[:,ni,...].unsqueeze(1))
             
@@ -165,17 +168,17 @@ def run(opt):
 
 if __name__ == "__main__":
     parse = argparse.ArgumentParser()
-    parse.add_argument('--device', type=str, default='mps', help='cuda or cpu or mps')
-    parse.add_argument('--batch_size', type=int, default=4, help='batch size')
+    parse.add_argument('--device', type=str, default='cuda', help='cuda or cpu or mps')
+    parse.add_argument('--batch_size', type=int, default=1, help='batch size')
     parse.add_argument('--img_size', type=int, default=320, help='trian img size')
     parse.add_argument('--epochs', type=int, default=1000, help='max train epoch')
     parse.add_argument('--data', type=str,default='./data', help='datasets config path')
     parse.add_argument('--save_period', type=int, default=4, help='save per n epoch')
-    parse.add_argument('--workers', type=int, default=16, help='thread num to load data')
+    parse.add_argument('--workers', type=int, default=6, help='thread num to load data')
     parse.add_argument('--shuffle', action='store_false', help='chose to unable shuffle in Dataloader')
     parse.add_argument('--save_path', type=str, default='./run/train/')
     parse.add_argument('--save_name', type=str, default='exp_new')
-    parse.add_argument('--lr', type=float, default=0.01)
+    parse.add_argument('--lr', type=float, default=0.001)
     parse.add_argument('--optimizer', type=str, default='Adam', help='only support: [Adam, AdamW, SGD, ASGD]')
     # parse.add_argument('--loss', type=str, default='MSELoss', help='[MSELoss]')
     parse.add_argument('--resume', action='store_true')
