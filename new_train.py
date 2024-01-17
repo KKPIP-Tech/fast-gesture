@@ -117,13 +117,13 @@ def train(opt, save_path):
                 # 选择批次中的第一个图像，并去除批次大小维度
                 image_to_show = forward_heatmaps[ni][0].cpu().detach().numpy().astype(np.float32)
 
-                # 确保图像是单通道的，尺寸为 (320, 320)
+                # # 确保图像是单通道的，尺寸为 (320, 320)
                 image_to_show = image_to_show[0, :, :]
 
-                # 转换数据类型并调整像素值范围
-                # image_to_show = (image_to_show).astype(np.uint8)
-                # print("MAX: ", np.max(image_to_show))
-                # 显示图像
+                # # 转换数据类型并调整像素值范围
+                # # image_to_show = (image_to_show).astype(np.uint8)
+                # # print("MAX: ", np.max(image_to_show))
+                # # 显示图像
                 image_to_show = cv2.resize(image_to_show, (200, 200))
                 cv2.imshow(f"Forward {ni}", image_to_show)
                 cv2.waitKey(1) # 等待按键事件
@@ -174,11 +174,11 @@ if __name__ == "__main__":
     parse.add_argument('--epochs', type=int, default=1000, help='max train epoch')
     parse.add_argument('--data', type=str,default='./data', help='datasets config path')
     parse.add_argument('--save_period', type=int, default=4, help='save per n epoch')
-    parse.add_argument('--workers', type=int, default=6, help='thread num to load data')
+    parse.add_argument('--workers', type=int, default=12, help='thread num to load data')
     parse.add_argument('--shuffle', action='store_false', help='chose to unable shuffle in Dataloader')
     parse.add_argument('--save_path', type=str, default='./run/train/')
     parse.add_argument('--save_name', type=str, default='exp_new')
-    parse.add_argument('--lr', type=float, default=0.001)
+    parse.add_argument('--lr', type=float, default=0.01)
     parse.add_argument('--optimizer', type=str, default='Adam', help='only support: [Adam, AdamW, SGD, ASGD]')
     # parse.add_argument('--loss', type=str, default='MSELoss', help='[MSELoss]')
     parse.add_argument('--resume', action='store_true')

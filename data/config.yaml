@@ -9,7 +9,7 @@
 #     resolution: 图像分辨率。
 #     names: 手势类别的名称列表，包含了每个手势类别的名称。
 
-root: "/home/kd/WD_1_Data4T/Datasets/AugmaGesture"
+root: "/home/kd/Documents/Datasets/AugmaGesture"
 
 resolution: [1280, 720]
 

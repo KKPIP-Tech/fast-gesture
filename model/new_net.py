@@ -230,16 +230,16 @@ class MLPUNET(nn.Module):
         
         # Down Sample
         R1 = self.DownConv1(x)            # [BatchSize, 32, 320, 320]
-        R1 = self.mlp1(R1)
-        R2 = self.DownConv2(self.DownSample1(R1))  # [BatchSize, 64, 160, 160]
-        R2 = self.ca(R2) * R2
-        R2 = self.sa(R2) * R2
-        R2 = self.mlp2(R2)
-        R3 = self.DownConv3(self.DownSample2(R2))  # [BatchSize, 128, 80, 80]
-        R3 = self.mlp3(R3)
-        R4 = self.DownConv4(self.DownSample3(R3))  # [BatchSize, 256, 40, 40]
-        R4 = self.mlp4(R4)
-        R5 = self.DownConv5(self.DownSample4(R4))  # [BatchSize, 512, 20, 20]
+        R1m = self.mlp1(R1)
+        R2 = self.DownConv2(self.DownSample1(R1m))  # [BatchSize, 64, 160, 160]
+        # R2s = self.sa(R2) * R2
+        # R2c = self.ca(R2)  # * R2
+        R2m = self.mlp2(R2)
+        R3 = self.DownConv3(self.DownSample2(R2m))  # [BatchSize, 128, 80, 80]
+        R3m = self.mlp3(R3)
+        R4 = self.DownConv4(self.DownSample3(R3m))  # [BatchSize, 256, 40, 40]
+        R4m = self.mlp4(R4)
+        R5 = self.DownConv5(self.DownSample4(R4m))  # [BatchSize, 512, 20, 20]
         # R5 = self.mlp5(R5)
         # R6 = self.DownConv6(self.DownSample5(R5))  # [BatchSize, 512, 10, 10]
         
