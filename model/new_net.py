@@ -10,7 +10,8 @@ class Conv(nn.Module):
         self.conv = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, 3, padding=1),
             nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(inplace=True),
+            nn.Dropout(0.1)   
         )
         self.use_res_connect = in_channels == out_channels
 
@@ -26,9 +27,9 @@ class MLP(nn.Module):
         super(MLP, self).__init__()
         self.fc = nn.Sequential(
             nn.Linear(channel_size, channel_size // 2),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(inplace=True),
             nn.Linear(channel_size // 2, channel_size),
-            nn.ReLU(inplace=True)
+            nn.LeakyReLU(inplace=True)
         )
 
     def forward(self, x):
@@ -45,13 +46,13 @@ class DownSample(nn.Module):
 
         # self.Down = nn.Sequential(
         #     nn.Conv2d(in_channels, in_channels, 3, 2, 1),
-        #     nn.ReLU()
+        #     nn.LeakyReLU()
         # )
         
         self.Down = nn.Sequential(
             nn.Conv2d(in_channels, in_channels, 3, stride=2, padding=1),
             nn.BatchNorm2d(in_channels),
-            nn.ReLU(inplace=True)
+            nn.LeakyReLU(inplace=True)
         )
     
     def forward(self, x):
@@ -67,7 +68,7 @@ class UpSample(nn.Module):
         self.Up = nn.Sequential(
             nn.ConvTranspose2d(in_channels, in_channels // 2, 2, stride=2),
             nn.BatchNorm2d(in_channels // 2),
-            nn.ReLU(inplace=True)
+            nn.LeakyReLU(inplace=True),
         )
         
     def forward(self, x, r):
@@ -92,16 +93,15 @@ class DepthwiseSeparableConv(nn.Module):
         self.DSC = nn.Sequential(
             nn.Conv2d(in_channels, in_channels, kernel_size=kernel_size, padding=padding, groups=in_channels),
             nn.BatchNorm2d(out_channels),  # 批次归一化
-            nn.ReLU(inplace=True),  # 激活函数，用于输出
+            nn.LeakyReLU(inplace=True),  # 激活函数，用于输出
             nn.Conv2d(in_channels, out_channels, kernel_size=1),
             nn.BatchNorm2d(out_channels),  # 批次归一化
-            nn.ReLU(inplace=True),  # 激活函数，用于输出
+            nn.LeakyReLU(inplace=True),  # 激活函数，用于输出
         )
     
     def forward(self, x):
         x = self.DSC(x)
         return x
-
 
 class DetectHead(nn.Module):
     def __init__(self,head_nums, in_channles=32) -> None:
@@ -112,11 +112,11 @@ class DetectHead(nn.Module):
         for _ in range(head_nums):
             head = nn.Sequential(
                 nn.Conv2d(in_channles, in_channles//2, kernel_size=(1, 1), padding=0),
-                nn.ReLU(inplace=True),
+                nn.LeakyReLU(inplace=True),
                 nn.Conv2d(in_channles//2, in_channles//4, kernel_size=(1, 1), padding=0),
-                nn.ReLU(inplace=True),
+                nn.LeakyReLU(inplace=True),
                 nn.Conv2d(in_channles//4, 1, kernel_size=(1, 1), padding=0),
-                # nn.ReLU(inplace=True),
+                # nn.LeakyReLU(inplace=True),
                 nn.Sigmoid()
             )
             self.heads.append(head)
@@ -127,139 +127,83 @@ class DetectHead(nn.Module):
         return heatmaps
 
 
-class SPPF(nn.Module):
-    def __init__(self, in_channels):
-        super(SPPF, self).__init__()
-        self.pool1 = nn.MaxPool2d(kernel_size=5, stride=1, padding=2)
-        self.pool2 = nn.MaxPool2d(kernel_size=9, stride=1, padding=4)
-        self.pool3 = nn.MaxPool2d(kernel_size=13, stride=1, padding=6)
-        self.conv = nn.Conv2d(in_channels * 4, in_channels, kernel_size=1)
-
-    def forward(self, x):
-        x1 = self.pool1(x)
-        x2 = self.pool2(x)
-        x3 = self.pool3(x)
-        x = torch.cat([x, x1, x2, x3], dim=1)
-        x = self.conv(x)
-        return x
-
-
-class ChannelAttention(nn.Module):
-    def __init__(self, in_channels, ratio=8):
-        super(ChannelAttention, self).__init__()
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        self.max_pool = nn.AdaptiveMaxPool2d(1)
-        self.fc = nn.Sequential(
-            nn.Conv2d(in_channels, in_channels // ratio, 1, bias=False),
-            nn.ReLU(),
-            nn.Conv2d(in_channels // ratio, in_channels, 1, bias=False)
-        )
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, x):
-        avg_out = self.fc(self.avg_pool(x))
-        max_out = self.fc(self.max_pool(x))
-        out = avg_out + max_out
-        return self.sigmoid(out)
-
-
-class SpatialAttention(nn.Module):
-    def __init__(self, kernel_size=7):
-        super(SpatialAttention, self).__init__()
-        self.conv1 = nn.Conv2d(2, 1, kernel_size, padding=kernel_size//2, bias=False)
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, x):
-        avg_out = torch.mean(x, dim=1, keepdim=True)
-        max_out, _ = torch.max(x, dim=1, keepdim=True)
-        x = torch.cat([avg_out, max_out], dim=1)
-        x = self.conv1(x)
-        return self.sigmoid(x)
-
-
-
 class MLPUNET(nn.Module):
     def __init__(self, detect_num=22):  # 只是定义网络中需要用到的方法
         super(MLPUNET, self).__init__()
 
         # 下采样
-        self.DownConv1 = Conv(3, 16)
-        self.DownSample1 = DownSample(16)
-        self.DownConv2 = Conv(16, 32)
-        self.DownSample2 = DownSample(32)
-        self.DownConv3 = Conv(32, 64)
-        self.DownSample3 = DownSample(64)
-        self.DownConv4 = Conv(64, 128)
-        self.DownSample4 = DownSample(128)
-        self.DownConv5 = Conv(128, 256)
+        self.DownConv1 = Conv(3, 8)
+        self.DownSample1 = DownSample(8)
+        self.DownConv2 = Conv(8, 16)
+        self.DownSample2 = DownSample(16)
+        self.DownConv3 = Conv(16, 32)
+        self.DownSample3 = DownSample(32)
+        self.DownConv4 = Conv(32, 64)
+        # self.DownSample4 = DownSample(64)
+        # self.DownConv5 = Conv(64, 128)
         # self.DownSample5 = DownSample(512)
         # self.DownConv6 = Conv(512, 1024)
-        
-        # 添加 SPPF 层
-        self.sppf = SPPF(256)
 
-        self.conv_layer = DepthwiseSeparableConv(256, 256)
+        self.conv_layer = DepthwiseSeparableConv(64, 64)
         
-        # 通道注意力和空间注意力
-        self.ca = ChannelAttention(32)
-        self.sa = SpatialAttention()
-        
-        self.mlp1 = MLP(16)
-        self.mlp2 = MLP(32)
-        self.mlp3 = MLP(64)
-        self.mlp4 = MLP(128)
-        self.mlp5 = MLP(256)
+        self.mlp1 = MLP(8)
+        self.mlp2 = MLP(16)
+        self.mlp3 = MLP(32)
+        self.mlp4 = MLP(64)
+        # self.mlp5 = MLP(128)
         # self.mlp6 = MLP(1024)
         
+        # # 添加全局平均池化层和全连接层
+        # self.global_avg_pool = nn.AdaptiveAvgPool2d(1)
+        # self.fc1 = nn.Linear(256, 128)  # 你可以调整这里的数字以适应你的网络
+        # self.fc2 = nn.Linear(128, 256)  # 第二个全连接层用于恢复维度
+                
         # self.UpSample2 = UpSample(1024)
         # self.UpConv1 = Conv(1024, 512)
-        self.UpSample3 = UpSample(256)
-        self.UpConv2 = Conv(256, 128)
-        self.UpSample4 = UpSample(128)
-        self.UpConv3 = Conv(128, 64)
-        self.UpSample5 = UpSample(64)
-        self.UpConv4 = Conv(64, 32)
-        self.UpSample6 = UpSample(32)
-        self.UpConv5 = Conv(32, 16)
+        # self.UpSample3 = UpSample(128)
+        # self.UpConv2 = Conv(128, 64)
+        self.UpSample4 = UpSample(64)
+        self.UpConv3 = Conv(64, 32)
+        self.UpSample5 = UpSample(32)
+        self.UpConv4 = Conv(32, 16)
+        self.UpSample6 = UpSample(16)
+        self.UpConv5 = Conv(16, 8)
 
         # 最后一层
         # self.conv = nn.Conv2d(32, 9, kernel_size=(1, 1), padding=0)
-        self.head = DetectHead(head_nums=detect_num, in_channles=16)
+        self.head = DetectHead(head_nums=detect_num, in_channles=8)
 
     def forward(self, x):
         
         # Down Sample
         R1 = self.DownConv1(x)            # [BatchSize, 32, 320, 320]
-        R1m = self.mlp1(R1)
-        R2 = self.DownConv2(self.DownSample1(R1m))  # [BatchSize, 64, 160, 160]
-        # R2s = self.sa(R2) * R2
-        # R2c = self.ca(R2)  # * R2
-        R2m = self.mlp2(R2)
-        R3 = self.DownConv3(self.DownSample2(R2m))  # [BatchSize, 128, 80, 80]
-        R3m = self.mlp3(R3)
-        R4 = self.DownConv4(self.DownSample3(R3m))  # [BatchSize, 256, 40, 40]
-        R4m = self.mlp4(R4)
-        R5 = self.DownConv5(self.DownSample4(R4m))  # [BatchSize, 512, 20, 20]
+        # R1m = self.mlp1(R1)
+        R2 = self.DownConv2(self.DownSample1(R1))  # [BatchSize, 64, 160, 160]
+        # R2m = self.mlp2(R2)
+        R3 = self.DownConv3(self.DownSample2(R2))  # [BatchSize, 128, 80, 80]
+        # R3m = self.mlp3(R3)
+        R4 = self.DownConv4(self.DownSample3(R3))  # [BatchSize, 256, 40, 40]
+        # R4m = self.mlp4(R4)
+        # R5 = self.DownConv5(self.DownSample4(R4m))  # [BatchSize, 512, 20, 20]
         # R5 = self.mlp5(R5)
         # R6 = self.DownConv6(self.DownSample5(R5))  # [BatchSize, 512, 10, 10]
+
         
-        # 使用 SPPF 层
+        R4 = self.conv_layer(R4)
+        R4 = self.conv_layer(R4)
+        R4 = self.conv_layer(R4)  # [BatchSize, 512, 20, 20]
         
-        R5 = self.conv_layer(R5)
-        R5 = self.conv_layer(R5)
-        R5 = self.conv_layer(R5)  # [BatchSize, 512, 20, 20]
-        
-        # 使用注意力机制
-        
-        # R5 = self.sppf(R5)
-        R5 = self.mlp5(R5)
-        
+        R4 = self.mlp4(R4)
+        # R5 = self.conv_layer(R5)
+        # R5 = self.conv_layer(R5)
+        # R5 = self.mlp5(R5)
+
         # 应用MLP模块
         # R6 = self.mlp6(R6)
 
         # O2 = self.UpConv1(self.UpSample2(R6, R5))  # [BatchSize, 512, 40, 40]
-        O3 = self.UpConv2(self.UpSample3(R5, R4))  # [BatchSize, 256, 40, 40]
-        O4 = self.UpConv3(self.UpSample4(O3, R3))  # [BatchSize, 128, 80, 80]
+        # O3 = self.UpConv2(self.UpSample3(R5, R4))  # [BatchSize, 256, 40, 40]
+        O4 = self.UpConv3(self.UpSample4(R4, R3))  # [BatchSize, 128, 80, 80]
         O5 = self.UpConv4(self.UpSample5(O4, R2))  # [BatchSize, 64, 160, 160]
         a = self.UpConv5(self.UpSample6(O5, R1))  # [BatchSize, 32, 320, 320]
         # print(a.shape)
@@ -270,71 +214,155 @@ class MLPUNET(nn.Module):
         return output
 
 
+class RepBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, num_repeats):
+        super(RepBlock, self).__init__()
+        layers = [nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1),
+                  nn.BatchNorm2d(out_channels),
+                  nn.ReLU(inplace=True)]
+        in_channels = out_channels
 
-class FastGesture(nn.Module):
-    def __init__(self, detect_num:int=22, max_hand_num:int=2) -> None:
-        super(FastGesture, self).__init__()
-        self.unet = MLPUNET(detect_num=detect_num)
-        self.max_hand_num = max_hand_num
+        for _ in range(num_repeats - 1):
+            layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1))
+            layers.append(nn.BatchNorm2d(out_channels))
+            layers.append(nn.ReLU(inplace=True))
 
-        # 添加额外的处理层
-        self.bbox_layer = nn.Conv2d(detect_num, 4, kernel_size=1)  # 用于提取手势的识别框
-        self.classification_layer = nn.Conv2d(detect_num, 1, kernel_size=1)  # 用于手势类别识别
+        self.rep_block = nn.Sequential(*layers)
 
     def forward(self, x):
-        batch_size = x.shape[0]
+        return self.rep_block(x)
+
+
+
+class LabelAssignNet(nn.Module):
+    def __init__(self, in_channels, num_classes):
+        super(LabelAssignNet, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels, 64, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Linear(256, num_classes)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+        x = self.avg_pool(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+        return x
+
+
+class BBoxAssignNet(nn.Module):
+    def __init__(self, in_channels):
+        super(BBoxAssignNet, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels, 64, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Linear(256, 4)  # 4 for bounding box coordinates
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+        x = self.avg_pool(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+        return x
+
+
+class ClassNet(nn.Module):
+    def __init__(self, in_channels, num_classes):
+        super(ClassNet, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels, 64, 3, padding=1)
+        self.conv2 = nn.Conv2d(64, 128, 3, padding=1)
+        self.conv3 = nn.Conv2d(128, 256, 3, padding=1)
+        self.classifier = nn.Conv2d(256, num_classes, 1)  # 逐像素分类
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+        x = self.classifier(x)
+        return x
+
+
+class BoxNet(nn.Module):
+    def __init__(self, in_channels, num_boxes_max, box_features):
+        super(BoxNet, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels, 64, 3, padding=1)
+        self.conv2 = nn.Conv2d(64, 128, 3, padding=1)
+        self.conv3 = nn.Conv2d(128, 256, 3, padding=1)
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Linear(256, num_boxes_max * box_features)  # 每个框4个特征(cx, cy, w, h)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+        x = self.avg_pool(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+        return x
+
+
+
+class ObjNet(nn.Module):
+    def __init__(self, in_channels):
+        super(ObjNet, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels, 64, 3, padding=1)
+        self.conv2 = nn.Conv2d(64, 128, 3, padding=1)
+        self.conv3 = nn.Conv2d(128, 256, 3, padding=1)
+        self.obj_predictor = nn.Conv2d(256, 1, 1)  # 预测置信度
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+        x = self.obj_predictor(x)
+        return x
+
+
+
+class FastGesture(nn.Module):
+    def __init__(self, detect_num:int=22, heatmap_channels:int=1, num_classes:int=5) -> None:
+        super(FastGesture, self).__init__()
+        self.unet = MLPUNET(detect_num=detect_num)
+        
+        self.rep_block = RepBlock(heatmap_channels, 32, num_repeats=3)
+        self.class_net = ClassNet(32, num_classes)
+        N=10  # max boxes number
+        self.box_net = BoxNet(32, N, 4)
+        self.obj_net = ObjNet(32)
+        
+    def forward(self, x):
+        
         heatmaps = self.unet(x)
 
         # 假设heatmaps的最后一个元素是最终的特征图
         last_heatmap = heatmaps[-1]  # 取最后一个heatmap，假设其形状为 [batch, channels, height, width]
-
-        # 提取手势识别框
-        bboxes = self.bbox_layer(last_heatmap)  # [batch, 4, height, width]
-        bboxes = bboxes.permute(0, 2, 3, 1)  # [batch, height, width, 4]
-        bboxes = bboxes.contiguous().view(batch_size, -1, 4)  # [batch, height*width, 4]
-
-        # 提取手势类别
-        classifications = self.classification_layer(last_heatmap)  # [batch, 1, height, width]
-        classifications = classifications.squeeze(1)  # [batch, height, width]
-        classifications = classifications.view(batch_size, -1)  # [batch, height*width]
-
-        # 关键点提取
-        keypoints = self.extract_keypoints(heatmaps, batch_size)
-
-        # 构建最终的输出
-        final_output = {
-            "bboxes": bboxes,
-            "classifications": classifications,
-            "keypoints": keypoints
-        }
-        return heatmaps, final_output
-    
-    def extract_keypoints(self, heatmaps, batch_size):
-        """
-        提取关键点的位置。
-        :param heatmaps: 输入的特征图 [detect_num, batch, height, width]
-        :param batch_size: 批次大小
-        :return: 关键点的坐标列表
-        """
-        keypoints = []
-        for heatmap in heatmaps:
-            # 应用3x3最大池化来找到关键点，保留边缘
-            pooled_heatmaps = F.max_pool2d(heatmap, kernel_size=3, stride=1, padding=1)
-            # 找到最大值点，即关键点位置
-            keypoints_mask = (heatmap == pooled_heatmaps)
-
-            # 对于每个batch中的每张heatmap，提取关键点位置
-            for b in range(batch_size):
-                keypoint_coords = torch.nonzero(keypoints_mask[b], as_tuple=False)
-                # 将关键点坐标归一化
-                normalized_keypoints = keypoint_coords.float() / torch.tensor([heatmap.shape[2], heatmap.shape[3]])
-                keypoints.append(normalized_keypoints)
-
-        # 将所有batch的关键点坐标汇总到一个列表中
-        keypoints = torch.cat(keypoints, dim=0)
-        return keypoints
+        
+        # print(f"last heatmaps group shape {last_heatmap.shape}")
+        
+        features = self.rep_block(last_heatmap)
+        
+        class_scores = self.class_net(features)
+        bboxes = self.box_net(features)
+        N=10
+        bboxes = bboxes.view(-1, 10, 4)
+        obj_scores = self.obj_net(features)
+        
+        # print(f"class scores shape: {class_scores.shape}")
+        # print(f"bboxes shape: {bboxes.shape}")
+        # print(f"obj shape: {obj_scores.shape}")
+        # class scores shape: torch.Size([2, 5, 320, 320])
+        # bboxes shape: torch.Size([2, 4, 320, 320])
+        # obj shape: torch.Size([2, 1, 320, 320])
+        
+        return heatmaps, class_scores, bboxes, obj_scores
 
     
 if __name__ == "__main__":
-    net = MLPUNET(detect_num=22).to('cpu')
-    summary(net,  input_size=(3, 320, 320), batch_size=1, device='cpu')
+    net = FastGesture(detect_num=22).to('cuda')
+    summary(net,  input_size=(3, 320, 320), batch_size=1, device='cuda')

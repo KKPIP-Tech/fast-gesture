@@ -11,7 +11,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 
 from tqdm import tqdm
-from model.new_net import MLPUNET
+from model.new_net import FastGesture
 from utils.datasets import Datasets
 
 
@@ -60,6 +60,39 @@ def select_device(opt):
     return device
 
 
+def bbox_loss_fn(predicted_bboxes, true_bboxes, num_max_boxes, mse_loss):
+    """
+    计算边界框损失
+    :param predicted_bboxes: 预测的边界框，形状为 [batch_size, num_max_boxes, 4]
+    :param true_bboxes: 实际的边界框，形状为 [batch_size, num_true_boxes, 4]
+    :param num_max_boxes: 预测的最大边界框数量
+    :return: 边界框损失
+    """
+    batch_size = predicted_bboxes.size(0)
+    
+
+    loss = 0.0
+    for i in range(batch_size):
+        num_true_boxes = true_bboxes[i].size(0)
+
+        # 为每个实际框找到最佳匹配的预测框
+        if num_true_boxes > 0:
+            for j in range(num_true_boxes):
+                # 假设简单地选择最近的预测框
+                distances = torch.norm(predicted_bboxes[i] - true_bboxes[i][j], dim=1)
+                best_match = torch.argmin(distances)
+                loss += mse_loss(predicted_bboxes[i][best_match], true_bboxes[i][j])
+
+        # 如果预测的框比实际的多，将多余的预测框视为负样本
+        if num_max_boxes > num_true_boxes:
+            num_neg_samples = num_max_boxes - num_true_boxes
+            neg_samples_loss = mse_loss(predicted_bboxes[i][:num_neg_samples], torch.zeros_like(predicted_bboxes[i][:num_neg_samples]))
+            loss += torch.sum(neg_samples_loss)
+
+    return loss / batch_size
+
+
+
 def train(opt, save_path, resume_pth=None):
     data_json = opt.data
     print(f"save_path: {save_path}")
@@ -84,10 +117,13 @@ def train(opt, save_path, resume_pth=None):
     
     # init model
     kc = datasets.get_kc()
-    model = MLPUNET(detect_num=(kc + 1)).to(device=device)
+    nc = datasets.get_nc()
+    model = FastGesture(detect_num=(kc + 1), heatmap_channels=1, num_classes=nc).to(device=device)
     
-    loss_F = torch.nn.MSELoss()
-    loss_F.to(device=device)
+    loss_F = torch.nn.MSELoss().to(device=device)
+    class_loss_fn = nn.CrossEntropyLoss().to(device=device)
+    box_mse_loss = nn.MSELoss(reduction='none')
+    obj_loss_fn = nn.BCEWithLogitsLoss().to(device=device)
     
     # 优化器
     user_set_optim = opt.optimizer
@@ -106,25 +142,39 @@ def train(opt, save_path, resume_pth=None):
         max_loss = 10
         pbar = tqdm(dataloader, desc=f"[Epoch {epoch} ->]")
         for index, datapack in enumerate(pbar):
-            images, heatmaps_label, bbox_gesture_label= datapack
+            images, heatmaps_label, labels, bboxes, objects= datapack
             
             images = images.to(device)
             heatmaps_label = heatmaps_label.to(device)
-            # bbox_gesture_label = bbox_gesture_label.to(device)
+            labels = labels.to(device)
+            bboxes = bboxes.to(device)
+            objects = objects.to(device)
             
             # print(f"heatmaps label max {np.max(heatmaps_label[0][0].detach().cpu().numpy().astype(np.float32)*255)}")
             # cv2.imshow("heatmap label", heatmaps_label[0][0].detach().cpu().numpy().astype(np.float32)*255)
             # cv2.waitKey()
             
-            forward_heatmaps = model(images)
+            f_heatmaps, f_class_scores, f_bboxes, f_obj_scores = model(images)
+            # class scores shape: torch.Size([2, 5, 320, 320])
+            # bboxes shape: torch.Size([2, 4, 320, 320])
+            # obj shape: torch.Size([2, 1, 320, 320])
+            
             loss = 0
             
+            # 计算损失
+            class_loss = class_loss_fn(f_class_scores, labels)
+            bbox_loss = bbox_loss_fn(f_bboxes, bboxes, 10, box_mse_loss)
+            objects = objects.unsqueeze(1)
+            obj_loss = obj_loss_fn(f_obj_scores, objects)
+            
+            loss = class_loss + bbox_loss + obj_loss
+                
             for ni in range(kc+1):  # ni: names index
                 # print("Label NI", label[:,ni,...].mean())
                 # print(f"Label Shape[{ni}]", label[:,ni,...].shape)
                 # print(f"Forward Shape[{ni}]", forward[ni].shape)
                 # 选择批次中的第一个图像，并去除批次大小维度
-                # image_to_show = forward_heatmaps[ni][0].cpu().detach().numpy().astype(np.float32)
+                # image_to_show = f_heatmaps[ni][0].cpu().detach().numpy().astype(np.float32)
 
                 # # # 确保图像是单通道的，尺寸为 (320, 320)
                 # image_to_show = image_to_show[0, :, :]
@@ -137,22 +187,24 @@ def train(opt, save_path, resume_pth=None):
                 # cv2.imshow(f"Forward {ni}", image_to_show)
                 # cv2.waitKey(1) # 等待按键事件
                 # # cv2.waitKey(0)
-                loss += loss_F(forward_heatmaps[ni], heatmaps_label[:,ni,...].unsqueeze(1))
+                loss += loss_F(f_heatmaps[ni], heatmaps_label[:,ni,...].unsqueeze(1))
             
             # loss = loss_F(forward, label)  # 计算损失
             optimizer.zero_grad()  # 因为每次反向传播的时候，变量里面的梯度都要清零
             
-            loss.backward()  # 变量得到了grad
+            loss.sum().backward()  # 变量得到了grad
             
-            optimizer.step()  # 更新参数          
-            total_loss += loss.item()
+            optimizer.step()  # 更新参数     
+            loss_scalar = loss.sum()      
+            total_loss += loss_scalar.item()
             
+            # print(f"total loss {total_loss}")
 
-            if loss < min_loss:
-                min_loss = loss
+            if total_loss < min_loss:
+                min_loss = total_loss
 
-            if loss > max_loss:
-                max_loss = loss
+            if total_loss > max_loss:
+                max_loss = total_loss
             
             avg_loss = total_loss/(index+1)
             

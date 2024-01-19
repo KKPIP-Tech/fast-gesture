@@ -72,11 +72,14 @@ class Datasets(torch.utils.data.Dataset):
             empty_heatmap_original_size.copy() for _ in range(self.kc + 1)
         ] 
         
-        # Gesture and boxx label [hand_num, 5] id, cx, cy, w, h
-        empty_gesture_bbox = np.array([1.0, 0.0, 0.0, 0.0, 0.0])
-        gesture_bbox_label = [
-            empty_gesture_bbox.copy() for _ in range(self.max_hand_num)
-        ]
+        # labels
+        # labels.append(np.array([ni, self.height, self.width]))
+        empty_label = np.zeros((original_height, original_width))
+        labels = [empty_label.copy() for _ in range(self.nc)]
+        # bboxes xy xy
+        bboxes = []
+        #objects
+        objects = np.zeros((self.height, self.width), dtype=np.float32)
         
         '''
         kc + 1 是因为需要在 heatmaps_label 最后添加一张绘制了所有的点的 heatmap。
@@ -93,6 +96,7 @@ class Datasets(torch.utils.data.Dataset):
             y_cache = []
             for keypoint in points_json:
                 key_index = int(keypoint['id'])
+                labels_temp = labels[ni]
                 # key_index = self.get_keypoints_index(id=id)
                 # if key_index is None:
                 #     continue
@@ -114,22 +118,25 @@ class Datasets(torch.utils.data.Dataset):
                 
                 target_allkp_heatmap[int_y][int_x] = 255  # height, width
                 target_index_heatmap[int_y][int_x] = 255  # height, width
+                labels_temp[int_y][int_x] = 1
 
                 heatmaps_label[-1] = target_allkp_heatmap
                 heatmaps_label[key_index] = target_index_heatmap
+                labels[ni] = labels_temp
             
             # get cx, cy, w, h
-            max_x = max(x_cache)
-            min_x = min(x_cache)
-            max_y = max(y_cache)
-            min_y = min(y_cache)
+            max_x = int(max(x_cache))
+            min_x = int(min(x_cache))
+            max_y = int(max(y_cache))
+            min_y = int(min(y_cache))
             
             w = max_x - min_x
             h = max_y - min_y
             cx = w/2 + min_x
             cy = h/2 + min_y
-            single_hand_bbox_label = [ni, cx, cy, w, h]
-            gesture_bbox_label[hand_count] = np.array(single_hand_bbox_label)
+            single_hand_bbox_label = np.array([cx, cy, h, w])
+            bboxes.append(single_hand_bbox_label)
+            objects[min_y:max_y, min_x:max_x] = 1.0
             hand_count += 0
             if hand_count < self.max_hand_num:
                 continue
@@ -151,12 +158,19 @@ class Datasets(torch.utils.data.Dataset):
             # print(resize_heatmap.shape)
             heatmaps_label[heatmap_index] = resize_heatmap
         
+        for label_index in range(len(labels)):
+            label_temp = labels[label_index]
+            label_temp = cv2.resize(label_temp, (self.width, self.height), cv2.INTER_LINEAR)
+            labels[label_index] = label_temp
+        
         # # convert data to tensor -------------
         tensor_img = transforms.ToTensor()(resize_img)
         tensor_heatmap_label = torch.tensor(np.array(heatmaps_label), dtype=torch.float32)
-        tensor_bbox_label = torch.tensor(np.array(gesture_bbox_label), dtype=torch.float32)
+        tensor_labels = torch.tensor(np.array(labels), dtype=torch.float32)
+        tensor_bboxes = torch.tensor(np.array(bboxes), dtype=torch.float32)
+        tensor_objects = torch.tensor(objects, dtype=torch.float32)
 
-        return tensor_img, tensor_heatmap_label, tensor_bbox_label
+        return tensor_img, tensor_heatmap_label, tensor_labels, tensor_bboxes, tensor_objects
 
     def __len__(self):
         return len(self.datapack)
@@ -167,13 +181,14 @@ class Datasets(torch.utils.data.Dataset):
     def get_kc(self) -> int:
         return self.kc
     
+    def get_nc(self) -> int:
+        return self.nc
+    
     @staticmethod
     def load_data(names, datasets_path, limit:int = None):
         # Load All Images Path, Labels Path and name index
         datapack: list = []  # [[img, leb, name_index]...]
         search_path: list = []
-        
-        names_length = len(names) + 1
         
         for name in names:
             # get all search dir by name index
@@ -188,7 +203,7 @@ class Datasets(torch.utils.data.Dataset):
                     img = target_image_path + filename
                     label_name = filename.replace(".jpg", ".json")
                     leb = target_label_path + label_name
-                    name_index = names.index(name) / names_length
+                    name_index = names.index(name)
                     
                     datapack.append(
                         [img, leb, name_index]
