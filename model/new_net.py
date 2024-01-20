@@ -365,4 +365,4 @@ class FastGesture(nn.Module):
     
 if __name__ == "__main__":
     net = FastGesture(detect_num=22).to('cuda')
-    summary(net,  input_size=(3, 320, 320), batch_size=1, device='cuda')
+    summary(net,  input_size=(3, 128, 128), batch_size=1, device='cuda')

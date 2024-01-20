@@ -252,7 +252,7 @@ if __name__ == "__main__":
     parse = argparse.ArgumentParser()
     parse.add_argument('--device', type=str, default='cuda', help='cuda or cpu or mps')
     parse.add_argument('--batch_size', type=int, default=1, help='batch size')
-    parse.add_argument('--img_size', type=int, default=320, help='trian img size')
+    parse.add_argument('--img_size', type=int, default=128, help='trian img size')
     parse.add_argument('--epochs', type=int, default=1000, help='max train epoch')
     parse.add_argument('--data', type=str,default='./data', help='datasets config path')
     parse.add_argument('--save_period', type=int, default=4, help='save per n epoch')
@@ -262,8 +262,7 @@ if __name__ == "__main__":
     parse.add_argument('--save_name', type=str, default='exp')
     parse.add_argument('--lr', type=float, default=0.001)
     parse.add_argument('--optimizer', type=str, default='Adam', help='only support: [Adam, AdamW, SGD, ASGD]')
-    # parse.add_argument('--loss', type=str, default='MSELoss', help='[MSELoss]')
-    parse.add_argument('--resume', nargs='?', const=True, default=False)
+    parse.add_argument('--resume', nargs='?', const=True, default=False, help="Choice one path to resume training")
     parse = parse.parse_args()
 
     run(opt=parse)
