@@ -3,8 +3,10 @@ import yaml
 import sys
 import cv2
 import json
+from PIL import Image
 from time import time
 import numpy as np
+import random
 from pathlib import Path
 
 sys.path.append(Path(__file__).parent.parent.absolute().__str__())
@@ -12,6 +14,7 @@ sys.path.append(Path(__file__).parent.parent.absolute().__str__())
 import torch
 import torch.utils.data
 from torchvision import transforms
+from torchvision.transforms import functional as F
 
 from utils.augment import letterbox
 
@@ -48,16 +51,27 @@ class Datasets(torch.utils.data.Dataset):
         # get image path, lebel path, name index
         img_path, leb_path, ni = self.datapack[index]
         
+        # set data transforms
+        seed_value = random.randint(1, 10000000)
+        data_transforms = self.create_transforms()
+        
         # image process ---------------------
         original_img = cv2.imread(img_path)
         original_height, original_width = original_img.shape[:2]
         
         # canny, drawContours
         grey_img = cv2.cvtColor(original_img.copy(), cv2.COLOR_BGR2GRAY)
-        canny_img = cv2.Canny(grey_img, 0, 100, 80)
-        contours, hierarchy = cv2.findContours(canny_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        cv2.drawContours(original_img,contours,-1,(0,0,255),2) 
-        resize_img = cv2.resize(original_img, (self.width, self.height), cv2.INTER_AREA) 
+        # canny_img = cv2.Canny(grey_img, 0, 100, 80)
+        # contours, hierarchy = cv2.findContours(canny_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # cv2.drawContours(original_img,contours,-1,(0,0,255),2) 
+        resize_img = cv2.resize(grey_img, (self.width, self.height), cv2.INTER_AREA) 
+        pil_img = Image.fromarray(resize_img)
+        random.seed(seed_value)
+        np.random.seed(seed_value)
+        torch.manual_seed(seed_value)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed_value)
+        resize_img = data_transforms(pil_img)
         
         # cv2.imshow("Canny_image", resize_img)
         # cv2.waitKey(1)
@@ -151,6 +165,7 @@ class Datasets(torch.utils.data.Dataset):
             if heatmap_amax != 0:
                 heatmap /= heatmap_amax / 255
             heatmap_amax = np.max(heatmap)
+            # print(f"heatmap amax {heatmap_amax}")
             # heatmap /= 255
             resize_heatmap = cv2.resize(heatmap, (self.width, self.height), cv2.INTER_AREA)
             # cv2.imshow("resize heatmap", resize_heatmap)
@@ -163,14 +178,36 @@ class Datasets(torch.utils.data.Dataset):
             label_temp = cv2.resize(label_temp, (self.width, self.height), cv2.INTER_LINEAR)
             labels[label_index] = label_temp
         
+        # get transformed heatmaps
+        transformed_heatmaps = []
+        for heatmap in heatmaps_label:
+            heatmap[heatmap > 0.1] = 255
+            heatmap = F.to_pil_image((heatmap).astype(np.uint8))
+            random.seed(seed_value)
+            np.random.seed(seed_value)
+            torch.manual_seed(seed_value)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(seed_value)
+            transformed_heatmap = data_transforms(heatmap)
+            transformed_heatmaps.append(transformed_heatmap)
+        # 转换处理后的热图为张量
+        
+        tensor_heatmap_label = torch.stack(transformed_heatmaps)
+        
         # # convert data to tensor -------------
-        tensor_img = transforms.ToTensor()(resize_img)
-        tensor_heatmap_label = torch.tensor(np.array(heatmaps_label), dtype=torch.float32)
+        # tensor_img = transforms.ToTensor()(resize_img)
+        # tensor_heatmap_label = torch.tensor(np.array(heatmaps_label), dtype=torch.float32)
         tensor_labels = torch.tensor(np.array(labels), dtype=torch.float32)
         tensor_bboxes = torch.tensor(np.array(bboxes), dtype=torch.float32)
         tensor_objects = torch.tensor(objects, dtype=torch.float32)
 
-        return tensor_img, tensor_heatmap_label, tensor_labels, tensor_bboxes, tensor_objects
+        # print(f"tensor_heatmap_label[-1] max {torch.max(tensor_heatmap_label[-1])}")
+        # cv2.imshow("Transformed Heatmap", tensor_heatmap_label[-1].cpu().detach().squeeze(0).numpy().astype(np.float64))
+        # cv2.imshow("Transformed Image", resize_img.cpu().detach().squeeze(0).numpy().astype(np.float64))
+        # cv2.waitKey()
+        
+        
+        return resize_img, tensor_heatmap_label, tensor_labels, tensor_bboxes, tensor_objects
 
     def __len__(self):
         return len(self.datapack)
@@ -223,3 +260,37 @@ class Datasets(torch.utils.data.Dataset):
         if id not in keypoints_id:
             return None
         return keypoints_id.index(id)
+    
+    def create_transforms(self):
+        
+        transform_list = []
+
+        # Random horizontal flipping
+        transform_list.append(transforms.RandomHorizontalFlip())
+
+        # Random rotation
+        transform_list.append(transforms.RandomRotation(30))
+
+        # Random scaling
+        
+        scale_transform = transforms.RandomAffine(0, scale=(0.4, 0.6))
+        transform_list.append(scale_transform)
+
+        # Random cropping
+        crop_transform = transforms.RandomResizedCrop(size=(self.height, self.width), scale=(0.1, 0.6))
+        transform_list.append(crop_transform)
+
+        # Convert to tensor
+        transform_list.append(transforms.ToTensor())
+
+        # Combine all transforms
+        return transforms.Compose(transform_list)
+    
+    @staticmethod
+    def set_seed(seed_value=42):
+        random.seed(seed_value)
+        np.random.seed(seed_value)
+        torch.manual_seed(seed_value)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed_value)
+

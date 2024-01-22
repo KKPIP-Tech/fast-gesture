@@ -11,7 +11,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 
 from tqdm import tqdm
-from model.new_net import FastGesture
+from model.new_net import FastGesture, MLPUNET
 from utils.datasets import Datasets
 
 
@@ -118,7 +118,8 @@ def train(opt, save_path, resume_pth=None):
     # init model
     kc = datasets.get_kc()
     nc = datasets.get_nc()
-    model = FastGesture(detect_num=(kc + 1), heatmap_channels=1, num_classes=nc).to(device=device)
+    # model = FastGesture(detect_num=(kc + 1), heatmap_channels=1, num_classes=nc).to(device=device)
+    model = MLPUNET(detect_num=(kc+1)).to(device=device)
     
     loss_F = torch.nn.MSELoss().to(device=device)
     class_loss_fn = nn.CrossEntropyLoss().to(device=device)
@@ -153,8 +154,8 @@ def train(opt, save_path, resume_pth=None):
             # print(f"heatmaps label max {np.max(heatmaps_label[0][0].detach().cpu().numpy().astype(np.float32)*255)}")
             # cv2.imshow("heatmap label", heatmaps_label[0][0].detach().cpu().numpy().astype(np.float32)*255)
             # cv2.waitKey()
-            
-            f_heatmaps, f_class_scores, f_bboxes, f_obj_scores = model(images)
+            # f_heatmaps, f_class_scores, f_bboxes, f_obj_scores = model(images)
+            f_heatmaps = model(images)
             # class scores shape: torch.Size([2, 5, 320, 320])
             # bboxes shape: torch.Size([2, 4, 320, 320])
             # obj shape: torch.Size([2, 1, 320, 320])
@@ -162,32 +163,34 @@ def train(opt, save_path, resume_pth=None):
             loss = 0
             
             # 计算损失
-            class_loss = class_loss_fn(f_class_scores, labels)
-            bbox_loss = bbox_loss_fn(f_bboxes, bboxes, 10, box_mse_loss)
-            objects = objects.unsqueeze(1)
-            obj_loss = obj_loss_fn(f_obj_scores, objects)
+            # class_loss = class_loss_fn(f_class_scores, labels)
+            # bbox_loss = bbox_loss_fn(f_bboxes, bboxes, 10, box_mse_loss)
+            # objects = objects.unsqueeze(1)
+            # obj_loss = obj_loss_fn(f_obj_scores, objects)
             
-            loss = class_loss + bbox_loss + obj_loss
+            # loss = class_loss + bbox_loss + obj_loss
                 
+            image_to_show = f_heatmaps[-1][0].cpu().detach().numpy().astype(np.float32)  # *255
+
+            # # 确保图像是单通道的，尺寸为 (320, 320)
+            image_to_show = image_to_show[0, :, :]
+
+            # # 转换数据类型并调整像素值范围
+            # # image_to_show = (image_to_show).astype(np.uint8)
+            print("MAX: ", np.max(image_to_show))
+            # # 显示图像
+            # image_to_show = cv2.resize(image_to_show, (200, 200))
+            cv2.imshow(f"Forward", image_to_show)
+            cv2.waitKey(1) # 等待按键事件
+            
             for ni in range(kc+1):  # ni: names index
                 # print("Label NI", label[:,ni,...].mean())
                 # print(f"Label Shape[{ni}]", label[:,ni,...].shape)
                 # print(f"Forward Shape[{ni}]", forward[ni].shape)
                 # 选择批次中的第一个图像，并去除批次大小维度
-                # image_to_show = f_heatmaps[ni][0].cpu().detach().numpy().astype(np.float32)
-
-                # # # 确保图像是单通道的，尺寸为 (320, 320)
-                # image_to_show = image_to_show[0, :, :]
-
-                # # # 转换数据类型并调整像素值范围
-                # # # image_to_show = (image_to_show).astype(np.uint8)
-                # # # print("MAX: ", np.max(image_to_show))
-                # # # 显示图像
-                # image_to_show = cv2.resize(image_to_show, (200, 200))
-                # cv2.imshow(f"Forward {ni}", image_to_show)
-                # cv2.waitKey(1) # 等待按键事件
                 # # cv2.waitKey(0)
-                loss += loss_F(f_heatmaps[ni], heatmaps_label[:,ni,...].unsqueeze(1))
+                # loss += loss_F(f_heatmaps[ni], heatmaps_label[:,ni,...].unsqueeze(1))
+                loss += loss_F(f_heatmaps[ni], heatmaps_label[:,ni,...])
             
             # loss = loss_F(forward, label)  # 计算损失
             optimizer.zero_grad()  # 因为每次反向传播的时候，变量里面的梯度都要清零
@@ -218,12 +221,13 @@ def train(opt, save_path, resume_pth=None):
             else:
                 pbar.set_description(f"Epoch {epoch}, avg_l {avg_loss}")
                 
-        print(f"[Epoch {epoch}] | -> avg_l: {avg_loss:.4f}, min_l: {min_loss:.4f}, max_l: {max_loss:.4f}")
+        print(f"[Epoch {epoch}] | -> avg_l: {avg_loss:.6f}, min_l: {min_loss:.6f}, max_l: {max_loss:.6f}")
         
         ckpt = {
             'model': deepcopy(model.state_dict()),
             'optimizer': deepcopy(optimizer.state_dict()),
-            'epoch': epoch
+            'epoch': epo
+            ch
         }
         
         torch.save(ckpt, save_path + f'/model_epoch_{epoch}.pt')
@@ -252,7 +256,7 @@ if __name__ == "__main__":
     parse = argparse.ArgumentParser()
     parse.add_argument('--device', type=str, default='cuda', help='cuda or cpu or mps')
     parse.add_argument('--batch_size', type=int, default=1, help='batch size')
-    parse.add_argument('--img_size', type=int, default=128, help='trian img size')
+    parse.add_argument('--img_size', type=int, default=320, help='trian img size')
     parse.add_argument('--epochs', type=int, default=1000, help='max train epoch')
     parse.add_argument('--data', type=str,default='./data', help='datasets config path')
     parse.add_argument('--save_period', type=int, default=4, help='save per n epoch')

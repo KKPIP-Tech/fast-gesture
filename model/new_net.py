@@ -10,7 +10,7 @@ class Conv(nn.Module):
         self.conv = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, 3, padding=1),
             nn.BatchNorm2d(out_channels),
-            nn.LeakyReLU(inplace=True),
+            nn.ReLU(inplace=True),
             nn.Dropout(0.1)   
         )
         self.use_res_connect = in_channels == out_channels
@@ -27,9 +27,9 @@ class MLP(nn.Module):
         super(MLP, self).__init__()
         self.fc = nn.Sequential(
             nn.Linear(channel_size, channel_size // 2),
-            nn.LeakyReLU(inplace=True),
+            nn.ReLU(inplace=True),
             nn.Linear(channel_size // 2, channel_size),
-            nn.LeakyReLU(inplace=True)
+            nn.ReLU(inplace=True)
         )
 
     def forward(self, x):
@@ -46,13 +46,13 @@ class DownSample(nn.Module):
 
         # self.Down = nn.Sequential(
         #     nn.Conv2d(in_channels, in_channels, 3, 2, 1),
-        #     nn.LeakyReLU()
+        #     nn.ReLU()
         # )
         
         self.Down = nn.Sequential(
             nn.Conv2d(in_channels, in_channels, 3, stride=2, padding=1),
             nn.BatchNorm2d(in_channels),
-            nn.LeakyReLU(inplace=True)
+            nn.ReLU(inplace=True)
         )
     
     def forward(self, x):
@@ -68,7 +68,7 @@ class UpSample(nn.Module):
         self.Up = nn.Sequential(
             nn.ConvTranspose2d(in_channels, in_channels // 2, 2, stride=2),
             nn.BatchNorm2d(in_channels // 2),
-            nn.LeakyReLU(inplace=True),
+            nn.ReLU(inplace=True),
         )
         
     def forward(self, x, r):
@@ -93,10 +93,10 @@ class DepthwiseSeparableConv(nn.Module):
         self.DSC = nn.Sequential(
             nn.Conv2d(in_channels, in_channels, kernel_size=kernel_size, padding=padding, groups=in_channels),
             nn.BatchNorm2d(out_channels),  # 批次归一化
-            nn.LeakyReLU(inplace=True),  # 激活函数，用于输出
+            nn.ReLU(inplace=True),  # 激活函数，用于输出
             nn.Conv2d(in_channels, out_channels, kernel_size=1),
             nn.BatchNorm2d(out_channels),  # 批次归一化
-            nn.LeakyReLU(inplace=True),  # 激活函数，用于输出
+            nn.ReLU(inplace=True),  # 激活函数，用于输出
         )
     
     def forward(self, x):
@@ -107,21 +107,23 @@ class DetectHead(nn.Module):
     def __init__(self,head_nums, in_channles=32) -> None:
         super(DetectHead, self).__init__()
 
+        self.mlp = MLP(in_channles)
+        
         self.heads = nn.ModuleList()
         
         for _ in range(head_nums):
             head = nn.Sequential(
                 nn.Conv2d(in_channles, in_channles//2, kernel_size=(1, 1), padding=0),
-                nn.LeakyReLU(inplace=True),
+                nn.ReLU(inplace=True),
                 nn.Conv2d(in_channles//2, in_channles//4, kernel_size=(1, 1), padding=0),
-                nn.LeakyReLU(inplace=True),
+                nn.ReLU(inplace=True),
                 nn.Conv2d(in_channles//4, 1, kernel_size=(1, 1), padding=0),
-                # nn.LeakyReLU(inplace=True),
+                # nn.ReLU(inplace=True),
                 nn.Sigmoid()
             )
             self.heads.append(head)
     def forward(self, x):
-
+        x = self.mlp(x)
         heatmaps = [head(x) for head in self.heads]
 
         return heatmaps
@@ -132,25 +134,25 @@ class MLPUNET(nn.Module):
         super(MLPUNET, self).__init__()
 
         # 下采样
-        self.DownConv1 = Conv(3, 8)
+        self.DownConv1 = Conv(1, 8)
         self.DownSample1 = DownSample(8)
         self.DownConv2 = Conv(8, 16)
         self.DownSample2 = DownSample(16)
         self.DownConv3 = Conv(16, 32)
         self.DownSample3 = DownSample(32)
         self.DownConv4 = Conv(32, 64)
-        # self.DownSample4 = DownSample(64)
-        # self.DownConv5 = Conv(64, 128)
+        self.DownSample4 = DownSample(64)
+        self.DownConv5 = Conv(64, 128)
         # self.DownSample5 = DownSample(512)
         # self.DownConv6 = Conv(512, 1024)
 
-        self.conv_layer = DepthwiseSeparableConv(64, 64)
+        self.conv_layer = DepthwiseSeparableConv(128, 128)
         
         self.mlp1 = MLP(8)
         self.mlp2 = MLP(16)
         self.mlp3 = MLP(32)
         self.mlp4 = MLP(64)
-        # self.mlp5 = MLP(128)
+        self.mlp5 = MLP(128)
         # self.mlp6 = MLP(1024)
         
         # # 添加全局平均池化层和全连接层
@@ -160,8 +162,8 @@ class MLPUNET(nn.Module):
                 
         # self.UpSample2 = UpSample(1024)
         # self.UpConv1 = Conv(1024, 512)
-        # self.UpSample3 = UpSample(128)
-        # self.UpConv2 = Conv(128, 64)
+        self.UpSample3 = UpSample(128)
+        self.UpConv2 = Conv(128, 64)
         self.UpSample4 = UpSample(64)
         self.UpConv3 = Conv(64, 32)
         self.UpSample5 = UpSample(32)
@@ -183,27 +185,27 @@ class MLPUNET(nn.Module):
         R3 = self.DownConv3(self.DownSample2(R2))  # [BatchSize, 128, 80, 80]
         # R3m = self.mlp3(R3)
         R4 = self.DownConv4(self.DownSample3(R3))  # [BatchSize, 256, 40, 40]
-        # R4m = self.mlp4(R4)
-        # R5 = self.DownConv5(self.DownSample4(R4m))  # [BatchSize, 512, 20, 20]
+        R4m = self.mlp4(R4)
+        R5 = self.DownConv5(self.DownSample4(R4m))  # [BatchSize, 512, 20, 20]
         # R5 = self.mlp5(R5)
         # R6 = self.DownConv6(self.DownSample5(R5))  # [BatchSize, 512, 10, 10]
 
         
-        R4 = self.conv_layer(R4)
-        R4 = self.conv_layer(R4)
-        R4 = self.conv_layer(R4)  # [BatchSize, 512, 20, 20]
+        R5 = self.conv_layer(R5)
+        R5 = self.conv_layer(R5)
+        R5 = self.conv_layer(R5)  # [BatchSize, 512, 20, 20]
         
-        R4 = self.mlp4(R4)
+        # R4 = self.mlp4(R4)
         # R5 = self.conv_layer(R5)
         # R5 = self.conv_layer(R5)
-        # R5 = self.mlp5(R5)
+        R5 = self.mlp5(R5)
 
         # 应用MLP模块
         # R6 = self.mlp6(R6)
 
         # O2 = self.UpConv1(self.UpSample2(R6, R5))  # [BatchSize, 512, 40, 40]
-        # O3 = self.UpConv2(self.UpSample3(R5, R4))  # [BatchSize, 256, 40, 40]
-        O4 = self.UpConv3(self.UpSample4(R4, R3))  # [BatchSize, 128, 80, 80]
+        O3 = self.UpConv2(self.UpSample3(R5, R4))  # [BatchSize, 256, 40, 40]
+        O4 = self.UpConv3(self.UpSample4(O3, R3))  # [BatchSize, 128, 80, 80]
         O5 = self.UpConv4(self.UpSample5(O4, R2))  # [BatchSize, 64, 160, 160]
         a = self.UpConv5(self.UpSample6(O5, R1))  # [BatchSize, 32, 320, 320]
         # print(a.shape)
@@ -364,5 +366,5 @@ class FastGesture(nn.Module):
 
     
 if __name__ == "__main__":
-    net = FastGesture(detect_num=22).to('cuda')
-    summary(net,  input_size=(3, 128, 128), batch_size=1, device='cuda')
+    net = MLPUNET(detect_num=22).to('cuda')
+    summary(net,  input_size=(1, 320, 320), batch_size=1, device='cuda')

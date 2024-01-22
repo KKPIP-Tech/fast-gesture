@@ -5,7 +5,7 @@ import time
 import numpy as np
 from torchvision import transforms
 from PIL import Image, ImageDraw, ImageFont
-from model.new_net import FastGesture
+from model.new_net import FastGesture, MLPUNET
 import torch.quantization
 
 def non_max_suppression(boxes, scores, threshold=0.5):
@@ -90,9 +90,19 @@ def load_model(checkpoint_path, model):
 
 
 # 图像预处理
-def preprocess_image(image_path):
-    image = cv2.imread(image_path)
-    resize_img = cv2.resize(image, (320, 320))
+def preprocess_image(image):
+    # image = cv2.imread(image_path)
+    # resize_img = cv2.resize(image, (320, 320))
+    
+    # # canny, drawContours
+    # grey_img = cv2.cvtColor(image.copy(), cv2.COLOR_BGR2GRAY)
+    # canny_img = cv2.Canny(grey_img, 0, 100, 80)
+    # contours, hierarchy = cv2.findContours(canny_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # cv2.drawContours(image,contours,-1,(0,0,255),2) 
+    resize_img = cv2.resize(image, (320, 320), cv2.INTER_AREA) 
+    resize_img = cv2.cvtColor(resize_img, cv2.COLOR_BGR2GRAY)
+    cv2.imshow("resize img", resize_img)
+    
     tensor_img = transforms.ToTensor()(resize_img)
     return tensor_img.unsqueeze(0)  # 增加batch维度
 
@@ -104,13 +114,27 @@ def infer_and_draw_boxes(image, model, device):
     image = image.to(device)
     
     with torch.no_grad():
-        heatmaps, class_scores, bboxes, obj_scores = model(image)
+        # heatmaps, class_scores, bboxes, obj_scores = model(image)
+        heatmaps = model(image)
+    
+    image_to_show = heatmaps[-1][0].cpu().detach().numpy().astype(np.float32)
+
+    # # 确保图像是单通道的，尺寸为 (320, 320)
+    image_to_show = image_to_show[0, :, :]
+
+    # # 转换数据类型并调整像素值范围
+    # # image_to_show = (image_to_show).astype(np.uint8)
+    # # print("MAX: ", np.max(image_to_show))
+    # # 显示图像
+    image_to_show = cv2.resize(image_to_show, (200, 200))
+    cv2.imshow(f"Forward {-1}", image_to_show)
+    cv2.waitKey(1) # 等待按键事件
     
     # print(f"obj_scores: {obj_scores}")
 
     # results = post_process_v2(heatmaps, class_scores, bboxes, obj_scores)
 
-    # # 将图像转换为PIL图像，用于绘制边界框
+    # 将图像转换为PIL图像，用于绘制边界框
     # orig_image = Image.open(image_path)
     # draw = ImageDraw.Draw(orig_image)
     # font = ImageFont.load_default()
@@ -127,16 +151,22 @@ def infer_and_draw_boxes(image, model, device):
 # 主程序
 if __name__ == '__main__':
     device = "cuda"#torch.device('cpu' if torch.cuda.is_available() else 'cpu')
-    model = FastGesture(detect_num=22, heatmap_channels=1, num_classes=5)  # 初始化模型，假设FastGesture是您的模型类
+    # model = FastGesture(detect_num=22, heatmap_channels=1, num_classes=5)  # 初始化模型，假设FastGesture是您的模型类
+    model = MLPUNET(22)
     model = model.to(device)
 
-    model = load_model('run/train/exp1/last.pt', model)  # 加载模型
+    model = load_model('/home/kd/Documents/Codes/fast-gesture/run/train/exp62/last.pt', model)  # 加载模型
     model.eval()  # 设置模型为评估模式
     
     image_path = '101.jpg'  # 测试图像路径
-    image = preprocess_image(image_path)
+    
+    capture = cv2.VideoCapture(0)
+    
     while True:
-        
+        ret, image = capture.read()
+        if not ret:
+            continue
         st = time.time()
+        image = preprocess_image(image)
         infer_and_draw_boxes(image, model, device)
         print(1/(time.time()-st))
