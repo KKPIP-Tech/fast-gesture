@@ -1,3 +1,6 @@
+import cv2
+import numpy as np
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -208,6 +211,10 @@ class MLPUNET(nn.Module):
         O4 = self.UpConv3(self.UpSample4(O3, R3))  # [BatchSize, 128, 80, 80]
         O5 = self.UpConv4(self.UpSample5(O4, R2))  # [BatchSize, 64, 160, 160]
         a = self.UpConv5(self.UpSample6(O5, R1))  # [BatchSize, 32, 320, 320]
+        
+        # cv2.imshow("Final a img", a[0][-1].cpu().detach().numpy().astype(np.float32))
+        # cv2.waitKey()
+        
         # print(a.shape)
         
         # # 最后一层，隐射到3个特征图

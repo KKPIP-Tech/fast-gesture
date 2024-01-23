@@ -53,7 +53,7 @@ class Datasets(torch.utils.data.Dataset):
         
         # set data transforms
         seed_value = random.randint(1, 10000000)
-        data_transforms = self.create_transforms()
+        img_transforms = self.create_transforms(fill=114)
         
         # image process ---------------------
         original_img = cv2.imread(img_path)
@@ -71,7 +71,7 @@ class Datasets(torch.utils.data.Dataset):
         torch.manual_seed(seed_value)
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(seed_value)
-        resize_img = data_transforms(pil_img)
+        resize_img = img_transforms(pil_img)
         
         # cv2.imshow("Canny_image", resize_img)
         # cv2.waitKey(1)
@@ -159,7 +159,7 @@ class Datasets(torch.utils.data.Dataset):
         # # GaussianBlur and resize
         for heatmap_index in range(len(heatmaps_label)):
             heatmap = heatmaps_label[heatmap_index]
-            gaussian_kernel = (25, 25)
+            gaussian_kernel = (35, 35)
             heatmap = cv2.GaussianBlur(heatmap, gaussian_kernel, 1, 0)
             heatmap_amax = np.max(heatmap)
             if heatmap_amax != 0:
@@ -180,6 +180,7 @@ class Datasets(torch.utils.data.Dataset):
         
         # get transformed heatmaps
         transformed_heatmaps = []
+        heatmap_transforms = self.create_transforms(fill=0)
         for heatmap in heatmaps_label:
             heatmap[heatmap > 0.1] = 255
             heatmap = F.to_pil_image((heatmap).astype(np.uint8))
@@ -188,7 +189,7 @@ class Datasets(torch.utils.data.Dataset):
             torch.manual_seed(seed_value)
             if torch.cuda.is_available():
                 torch.cuda.manual_seed_all(seed_value)
-            transformed_heatmap = data_transforms(heatmap)
+            transformed_heatmap = heatmap_transforms(heatmap)
             transformed_heatmaps.append(transformed_heatmap)
         # 转换处理后的热图为张量
         
@@ -204,7 +205,7 @@ class Datasets(torch.utils.data.Dataset):
         # print(f"tensor_heatmap_label[-1] max {torch.max(tensor_heatmap_label[-1])}")
         # cv2.imshow("Transformed Heatmap", tensor_heatmap_label[-1].cpu().detach().squeeze(0).numpy().astype(np.float64))
         # cv2.imshow("Transformed Image", resize_img.cpu().detach().squeeze(0).numpy().astype(np.float64))
-        # cv2.waitKey()
+        # cv2.waitKey(1)
         
         
         return resize_img, tensor_heatmap_label, tensor_labels, tensor_bboxes, tensor_objects
@@ -261,7 +262,7 @@ class Datasets(torch.utils.data.Dataset):
             return None
         return keypoints_id.index(id)
     
-    def create_transforms(self):
+    def create_transforms(self, fill=0):
         
         transform_list = []
 
@@ -269,16 +270,17 @@ class Datasets(torch.utils.data.Dataset):
         transform_list.append(transforms.RandomHorizontalFlip())
 
         # Random rotation
-        transform_list.append(transforms.RandomRotation(30))
+        transform_list.append(transforms.RandomRotation(30, fill=fill))
 
         # Random scaling
         
-        scale_transform = transforms.RandomAffine(0, scale=(0.4, 0.6))
+        scale_transform = transforms.RandomAffine(0, translate=(0.2, 0.6), scale=(0.6, 1.2), shear=0, fill=fill)
         transform_list.append(scale_transform)
 
         # Random cropping
-        crop_transform = transforms.RandomResizedCrop(size=(self.height, self.width), scale=(0.1, 0.6))
-        transform_list.append(crop_transform)
+        # crop_transform = transforms.RandomResizedCrop(size=(self.height, self.width), scale=(0.1, 0.6))
+        # transform_list.append(crop_transform)
+
 
         # Convert to tensor
         transform_list.append(transforms.ToTensor())

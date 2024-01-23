@@ -226,8 +226,7 @@ def train(opt, save_path, resume_pth=None):
         ckpt = {
             'model': deepcopy(model.state_dict()),
             'optimizer': deepcopy(optimizer.state_dict()),
-            'epoch': epo
-            ch
+            'epoch': epoch
         }
         
         torch.save(ckpt, save_path + f'/model_epoch_{epoch}.pt')
