@@ -117,8 +117,10 @@ class DetectHead(nn.Module):
         for _ in range(head_nums):
             head = nn.Sequential(
                 nn.Conv2d(in_channles, in_channles//2, kernel_size=(1, 1), padding=0),
+                # nn.BatchNorm2d(in_channles//2),
                 nn.ReLU(inplace=True),
                 nn.Conv2d(in_channles//2, in_channles//4, kernel_size=(1, 1), padding=0),
+                # nn.BatchNorm2d(in_channles//4),
                 nn.ReLU(inplace=True),
                 nn.Conv2d(in_channles//4, 1, kernel_size=(1, 1), padding=0),
                 # nn.ReLU(inplace=True),
