@@ -138,60 +138,57 @@ class MLPUNET(nn.Module):
     def __init__(self, detect_num=22):  # 只是定义网络中需要用到的方法
         super(MLPUNET, self).__init__()
 
-        # 下采样
+        # 修改后的下采样层
         self.DownConv1 = Conv(1, 8)
         self.DownSample1 = DownSample(8)
-        self.DownConv2 = Conv(8, 16)
-        self.DownSample2 = DownSample(16)
-        self.DownConv3 = Conv(16, 32)
-        self.DownSample3 = DownSample(32)
-        self.DownConv4 = Conv(32, 64)
-        self.DownSample4 = DownSample(64)
-        self.DownConv5 = Conv(64, 128)
-        # self.DownSample5 = DownSample(512)
-        # self.DownConv6 = Conv(512, 1024)
+        self.DownConv2 = Conv(8, 8)  # 修改通道数为8
+        self.DownSample2 = DownSample(8)
+        self.DownConv3 = Conv(8, 16)  # 修改通道数为16
+        self.DownSample3 = DownSample(16)
+        self.DownConv4 = Conv(16, 16)  # 修改通道数为16
+        self.DownSample4 = DownSample(16)
+        self.DownConv5 = Conv(16, 32)  # 修改通道数为32
 
-        self.conv_layer = DepthwiseSeparableConv(128, 128)
-        
+        # 中间层
+        self.conv_layer = DepthwiseSeparableConv(32, 32)
+
+        # MLP模块
         self.mlp1 = MLP(8)
-        self.mlp2 = MLP(16)
-        self.mlp3 = MLP(32)
-        self.mlp4 = MLP(64)
-        self.mlp5 = MLP(128)
-        # self.mlp6 = MLP(1024)
-        
-        # # 添加全局平均池化层和全连接层
-        # self.global_avg_pool = nn.AdaptiveAvgPool2d(1)
-        # self.fc1 = nn.Linear(256, 128)  # 你可以调整这里的数字以适应你的网络
-        # self.fc2 = nn.Linear(128, 256)  # 第二个全连接层用于恢复维度
-                
-        # self.UpSample2 = UpSample(1024)
-        # self.UpConv1 = Conv(1024, 512)
-        self.UpSample3 = UpSample(128)
-        self.UpConv2 = Conv(128, 64)
-        self.UpSample4 = UpSample(64)
-        self.UpConv3 = Conv(64, 32)
-        self.UpSample5 = UpSample(32)
-        self.UpConv4 = Conv(32, 16)
-        self.UpSample6 = UpSample(16)
-        self.UpConv5 = Conv(16, 8)
+        self.mlp2 = MLP(8)  # 修改MLP的通道数
+        self.mlp3 = MLP(16)
+        self.mlp4 = MLP(16)  # 修改MLP的通道数
+        self.mlp5 = MLP(32)
 
+        # 修改后的上采样层
+        self.UpSample3 = UpSample(32)
+        self.UpConv2 = Conv(32, 16)  # 融合后的通道数为80 (64 + 16)
+        self.UpSample4 = UpSample(16)
+        self.UpConv3 = Conv(24, 8)  # 融合后的通道数为32 (16 + 16)
+        self.UpSample5 = UpSample(8)
+        self.UpConv4 = Conv(12, 8)  # 融合后的通道数为16 (8 + 8)
+        self.UpSample6 = UpSample(8)
+        self.UpConv5 = Conv(12, 8)  # 融合后的通道数为16 (8 + 8)
         # 最后一层
         # self.conv = nn.Conv2d(32, 9, kernel_size=(1, 1), padding=0)
         self.head = DetectHead(head_nums=detect_num, in_channles=8)
 
     def forward(self, x):
-        
+        # print(f"Input shape {x.shape}")
         # Down Sample
         R1 = self.DownConv1(x)            # [BatchSize, 32, 320, 320]
+        # print(f"R1 shape {R1.shape}")
         # R1m = self.mlp1(R1)
         R2 = self.DownConv2(self.DownSample1(R1))  # [BatchSize, 64, 160, 160]
+        # print(f"R2 shape {R2.shape}")
         # R2m = self.mlp2(R2)
         R3 = self.DownConv3(self.DownSample2(R2))  # [BatchSize, 128, 80, 80]
+        # print(f"R3 shape {R3.shape}")
         # R3m = self.mlp3(R3)
         R4 = self.DownConv4(self.DownSample3(R3))  # [BatchSize, 256, 40, 40]
+        # print(f"R4 shape {R4.shape}")
         R4m = self.mlp4(R4)
         R5 = self.DownConv5(self.DownSample4(R4m))  # [BatchSize, 512, 20, 20]
+        # print(f"R5 shape {R5.shape}")
         # R5 = self.mlp5(R5)
         # R6 = self.DownConv6(self.DownSample5(R5))  # [BatchSize, 512, 10, 10]
 
@@ -210,14 +207,23 @@ class MLPUNET(nn.Module):
 
         # O2 = self.UpConv1(self.UpSample2(R6, R5))  # [BatchSize, 512, 40, 40]
         O3 = self.UpConv2(self.UpSample3(R5, R4))  # [BatchSize, 256, 40, 40]
+        O3 = O3 + R4m
+        # print(f"O3 shape {O3.shape}")
         O4 = self.UpConv3(self.UpSample4(O3, R3))  # [BatchSize, 128, 80, 80]
+        # print(f"O4 shape {O4.shape}")
         O5 = self.UpConv4(self.UpSample5(O4, R2))  # [BatchSize, 64, 160, 160]
+        
+        O5 = O5 + R2
+        # print(f"O5 shape {O5.shape}")
         a = self.UpConv5(self.UpSample6(O5, R1))  # [BatchSize, 32, 320, 320]
+        # print(f"a shape {a.shape}")
         
         # cv2.imshow("Final a img", a[0][-1].cpu().detach().numpy().astype(np.float32))
         # cv2.waitKey()
         
         # print(a.shape)
+        
+        a = a + R1
         
         # # 最后一层，隐射到3个特征图
         output = self.head(a)  # 输出两张 Heatmap
@@ -225,6 +231,7 @@ class MLPUNET(nn.Module):
         return output
 
 
+"""
 class RepBlock(nn.Module):
     def __init__(self, in_channels, out_channels, num_repeats):
         super(RepBlock, self).__init__()
@@ -372,7 +379,7 @@ class FastGesture(nn.Module):
         # obj shape: torch.Size([2, 1, 320, 320])
         
         return heatmaps, class_scores, bboxes, obj_scores
-
+"""
     
 if __name__ == "__main__":
     net = MLPUNET(detect_num=22).to('cuda')

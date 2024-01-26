@@ -11,7 +11,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 
 from tqdm import tqdm
-from model.new_net import FastGesture, MLPUNET
+from model.new_net import MLPUNET
 from utils.datasets import Datasets
 
 
@@ -177,7 +177,7 @@ def train(opt, save_path, resume_pth=None):
 
             # # 转换数据类型并调整像素值范围
             # # image_to_show = (image_to_show).astype(np.uint8)
-            print("MAX: ", np.max(image_to_show))
+            # print("MAX: ", np.max(image_to_show))
             # # 显示图像
             # image_to_show = cv2.resize(image_to_show, (200, 200))
             cv2.imshow(f"Forward", image_to_show)
