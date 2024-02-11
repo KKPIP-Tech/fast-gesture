@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 
 from tqdm import tqdm
 from model.new_net import MLPUNET
-from utils.datasets import Datasets
+from utils.datasets.datasets import Datasets
 
 
 def create_path(path):
@@ -107,7 +107,7 @@ def train(opt, save_path, resume_pth=None):
     
     
     # set datasets
-    datasets = Datasets(config_file=data_json, img_size=opt.img_size)
+    datasets = Datasets(config=data_json, img_size=opt.img_size)
     dataloader = DataLoader(
         dataset=datasets,
         batch_size=opt.batch_size,
@@ -119,7 +119,7 @@ def train(opt, save_path, resume_pth=None):
     kc = datasets.get_kc()
     nc = datasets.get_nc()
     # model = FastGesture(detect_num=(kc + 1), heatmap_channels=1, num_classes=nc).to(device=device)
-    model = MLPUNET(detect_num=(kc+1)).to(device=device)
+    # model = MLPUNET(detect_num=(kc+1)).to(device=device)
     
     loss_F = torch.nn.MSELoss().to(device=device)
     class_loss_fn = nn.CrossEntropyLoss().to(device=device)
@@ -128,34 +128,34 @@ def train(opt, save_path, resume_pth=None):
     
     # 优化器
     user_set_optim = opt.optimizer
-    optimizer = select_optim(net=model, opt=opt, user_set_optim=user_set_optim)
+    # optimizer = select_optim(net=model, opt=opt, user_set_optim=user_set_optim)
     
-    if resume_pth is not None:
-        # resume_state_dict = resume_pth['model'].float().state_dict()
-        model.load_state_dict(resume_pth['model'], strict=True)
-        start_epoch = resume_pth['epoch'] + 1
-        optimizer.load_state_dict(resume_pth['optimizer'])
+    # if resume_pth is not None:
+    #     # resume_state_dict = resume_pth['model'].float().state_dict()
+    #     model.load_state_dict(resume_pth['model'], strict=True)
+    #     start_epoch = resume_pth['epoch'] + 1
+    #     optimizer.load_state_dict(resume_pth['optimizer'])
             
     for epoch in range(start_epoch, max_epoch):
-        model.train()
+        # model.train()
         total_loss = 0.0
         min_loss = 10000
         max_loss = 10
         pbar = tqdm(dataloader, desc=f"[Epoch {epoch} ->]")
         for index, datapack in enumerate(pbar):
-            images, heatmaps_label, labels, bboxes, objects= datapack
+            # images, heatmaps_label, labels, bboxes, objects= datapack
             
-            images = images.to(device)
-            heatmaps_label = heatmaps_label.to(device)
-            labels = labels.to(device)
-            bboxes = bboxes.to(device)
-            objects = objects.to(device)
+            # images = images.to(device)
+            # heatmaps_label = heatmaps_label.to(device)
+            # labels = labels.to(device)
+            # bboxes = bboxes.to(device)
+            # objects = objects.to(device)
             
             # print(f"heatmaps label max {np.max(heatmaps_label[0][0].detach().cpu().numpy().astype(np.float32)*255)}")
             # cv2.imshow("heatmap label", heatmaps_label[0][0].detach().cpu().numpy().astype(np.float32)*255)
             # cv2.waitKey()
             # f_heatmaps, f_class_scores, f_bboxes, f_obj_scores = model(images)
-            f_heatmaps = model(images)
+            # f_heatmaps = model(images)
             # class scores shape: torch.Size([2, 5, 320, 320])
             # bboxes shape: torch.Size([2, 4, 320, 320])
             # obj shape: torch.Size([2, 1, 320, 320])
@@ -170,68 +170,68 @@ def train(opt, save_path, resume_pth=None):
             
             # loss = class_loss + bbox_loss + obj_loss
                 
-            image_to_show = f_heatmaps[-1][0].cpu().detach().numpy().astype(np.float32)  # *255
+            # image_to_show = f_heatmaps[-1][0].cpu().detach().numpy().astype(np.float32)  # *255
 
             # # 确保图像是单通道的，尺寸为 (320, 320)
-            image_to_show = image_to_show[0, :, :]
+            # image_to_show = image_to_show[0, :, :]
 
             # # 转换数据类型并调整像素值范围
             # # image_to_show = (image_to_show).astype(np.uint8)
             # print("MAX: ", np.max(image_to_show))
             # # 显示图像
             # image_to_show = cv2.resize(image_to_show, (200, 200))
-            cv2.imshow(f"Forward", image_to_show)
-            cv2.waitKey(1) # 等待按键事件
+            # cv2.imshow(f"Forward", image_to_show)
+            # cv2.waitKey(1) # 等待按键事件
             
-            for ni in range(kc+1):  # ni: names index
-                # print("Label NI", label[:,ni,...].mean())
-                # print(f"Label Shape[{ni}]", label[:,ni,...].shape)
-                # print(f"Forward Shape[{ni}]", forward[ni].shape)
-                # 选择批次中的第一个图像，并去除批次大小维度
-                # # cv2.waitKey(0)
-                # loss += loss_F(f_heatmaps[ni], heatmaps_label[:,ni,...].unsqueeze(1))
-                loss += loss_F(f_heatmaps[ni], heatmaps_label[:,ni,...])
+            # for ni in range(kc+1):  # ni: names index
+            #     # print("Label NI", label[:,ni,...].mean())
+            #     # print(f"Label Shape[{ni}]", label[:,ni,...].shape)
+            #     # print(f"Forward Shape[{ni}]", forward[ni].shape)
+            #     # 选择批次中的第一个图像，并去除批次大小维度
+            #     # # cv2.waitKey(0)
+            #     # loss += loss_F(f_heatmaps[ni], heatmaps_label[:,ni,...].unsqueeze(1))
+            #     loss += loss_F(f_heatmaps[ni], heatmaps_label[:,ni,...])
             
-            # loss = loss_F(forward, label)  # 计算损失
-            optimizer.zero_grad()  # 因为每次反向传播的时候，变量里面的梯度都要清零
+            # # loss = loss_F(forward, label)  # 计算损失
+            # optimizer.zero_grad()  # 因为每次反向传播的时候，变量里面的梯度都要清零
             
-            loss.sum().backward()  # 变量得到了grad
+            # loss.sum().backward()  # 变量得到了grad
             
-            optimizer.step()  # 更新参数     
-            loss_scalar = loss.sum()      
-            total_loss += loss_scalar.item()
+            # optimizer.step()  # 更新参数     
+            # loss_scalar = loss.sum()      
+            # total_loss += loss_scalar.item()
             
-            # print(f"total loss {total_loss}")
+            # # print(f"total loss {total_loss}")
 
-            if total_loss < min_loss:
-                min_loss = total_loss
+            # if total_loss < min_loss:
+            #     min_loss = total_loss
 
-            if total_loss > max_loss:
-                max_loss = total_loss
+            # if total_loss > max_loss:
+            #     max_loss = total_loss
             
-            avg_loss = total_loss/(index+1)
+            # avg_loss = total_loss/(index+1)
             
-            if device == 'cuda':
-            # 获取当前程序占用的GPU显存（以字节为单位）
-                gpu_memory_bytes = torch.cuda.memory_reserved(device)
-                # print(f"gpu_memory_bytes {gpu_memory_bytes}")
-                # 将字节转换为GB
-                gpu_memory_GB = round(gpu_memory_bytes / 1024 / 1024 / 1024, 2)
-                pbar.set_description(f"Epoch {epoch}, GPU {gpu_memory_GB} G, avg_l {avg_loss:.8f}")
-            else:
-                pbar.set_description(f"Epoch {epoch}, avg_l {avg_loss}")
+            # if device == 'cuda':
+            # # 获取当前程序占用的GPU显存（以字节为单位）
+            #     gpu_memory_bytes = torch.cuda.memory_reserved(device)
+            #     # print(f"gpu_memory_bytes {gpu_memory_bytes}")
+            #     # 将字节转换为GB
+            #     gpu_memory_GB = round(gpu_memory_bytes / 1024 / 1024 / 1024, 2)
+            #     pbar.set_description(f"Epoch {epoch}, GPU {gpu_memory_GB} G, avg_l {avg_loss:.8f}")
+            # else:
+            #     pbar.set_description(f"Epoch {epoch}, avg_l {avg_loss}")
                 
-        print(f"[Epoch {epoch}] | -> avg_l: {avg_loss:.6f}, min_l: {min_loss:.6f}, max_l: {max_loss:.6f}")
+        # print(f"[Epoch {epoch}] | -> avg_l: {avg_loss:.6f}, min_l: {min_loss:.6f}, max_l: {max_loss:.6f}")
         
-        ckpt = {
-            'model': deepcopy(model.state_dict()),
-            'optimizer': deepcopy(optimizer.state_dict()),
-            'epoch': epoch
-        }
+        # ckpt = {
+        #     'model': deepcopy(model.state_dict()),
+        #     'optimizer': deepcopy(optimizer.state_dict()),
+        #     'epoch': epoch
+        # }
         
-        torch.save(ckpt, save_path + f'/model_epoch_{epoch}.pt')
-        torch.save(ckpt, save_path + f'/last.pt')
-        print()
+        # torch.save(ckpt, save_path + f'/ep_{epoch}.pt')
+        # torch.save(ckpt, save_path + f'/last.pt')
+        # print() 
 
 def run(opt):
     # Create
@@ -259,7 +259,7 @@ if __name__ == "__main__":
     parse.add_argument('--epochs', type=int, default=1000, help='max train epoch')
     parse.add_argument('--data', type=str,default='./data', help='datasets config path')
     parse.add_argument('--save_period', type=int, default=4, help='save per n epoch')
-    parse.add_argument('--workers', type=int, default=12, help='thread num to load data')
+    parse.add_argument('--workers', type=int, default=14, help='thread num to load data')
     parse.add_argument('--shuffle', action='store_false', help='chose to unable shuffle in Dataloader')
     parse.add_argument('--save_path', type=str, default='./run/train/')
     parse.add_argument('--save_name', type=str, default='exp')

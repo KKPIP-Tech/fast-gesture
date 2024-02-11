@@ -9,13 +9,15 @@
 #     resolution: 图像分辨率。
 #     names: 手势类别的名称列表，包含了每个手势类别的名称。
 
-root: "/home/kd/Documents/Datasets/AugmaGesture"
+root: "/home/kd/Documents/AugmaGesture"
 
 resolution: [1280, 720]
 
 nc: 5  # names count
 
 names: ["one", "two", "five", "hold", "pickup"]
+
+target_points_id: [0, 2, 4, 5, 8, 9, 12, 13, 16, 17, 20]
 
 kc: 21  # keypoints count
 

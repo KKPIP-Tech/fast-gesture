@@ -31,7 +31,7 @@ def letterbox(image, target_shape=(640, 640), fill_color=(72, 72, 72), is_mask=F
             bottom_padding, 
             left_padding, 
             right_padding, 
-            cv2.BORDER_CONSTANT, value=0)  # add border
+            cv2.BORDER_CONSTANT, value=fill_color)  # add border
         
         return image, scale_ratio, left_padding, top_padding
     else:
@@ -45,4 +45,42 @@ def letterbox(image, target_shape=(640, 640), fill_color=(72, 72, 72), is_mask=F
             cv2.BORDER_CONSTANT, value=fill_color)  # add border
         
         return image, scale_ratio, left_padding, top_padding
+    
+
+def preprocess(image:np.ndarray=None, is_mask:bool=False, target_shape:tuple=(320, 320))->np.ndarray:
+    
+    if image is None:
+        assert ValueError("The Input of Preprocess Module Cannot Be Empty")
+    
+    # Get Letterbox Image
+    channels = image.shape[2]
+    if channels == 1:
+        if is_mask:
+            letterbox_image, scale_ratio, left_padding, top_padding = letterbox(
+                image=image,
+                target_shape=target_shape,
+                fill_color=0,
+                is_mask=True
+            )
+        else:
+            letterbox_image, scale_ratio, left_padding, top_padding = letterbox(
+                image=image,
+                target_shape=target_shape,
+                fill_color=72,
+                is_mask=False
+            )
+    elif channels == 3:
+        grey_img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        letterbox_image, scale_ratio, left_padding, top_padding = letterbox(
+            image=grey_img,
+            target_shape=target_shape,
+            fill_color=72,
+            is_mask=False
+        )
+    else:
+        assert ValueError("The Input Image Is Not Grey or BGR")
+    
+    return letterbox_image, scale_ratio, left_padding, top_padding
+    
+    
 

@@ -134,6 +134,31 @@ class DetectHead(nn.Module):
         return heatmaps
 
 
+class FPN(nn.Module):
+    def __init__(self, channels):
+        super(FPN, self).__init__()
+        # 定义FPN中的升级通道数卷积层
+        self.up_conv_layers = nn.ModuleList([
+            nn.Conv2d(ch, channels[0], kernel_size=1)  # 将所有特征图的通道数调整为最高层特征图的通道数
+            for ch in channels[:-1]
+        ])
+        self.conv_layers = nn.ModuleList([nn.Conv2d(channels[0], channels[0], kernel_size=3, padding=1, stride=1) for _ in channels[:-1]])
+        self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
+        
+    def forward(self, features):
+        upsampled_features = []
+        x = features[-1]  # 最深层特征开始
+        for feature, up_conv, conv in zip(reversed(features[:-1]), self.up_conv_layers, self.conv_layers):
+            x = self.upsample(x)
+            # 调整通道数以匹配
+            feature = up_conv(feature)
+            x = conv(x + feature)  # 现在x和feature的通道数匹配，可以相加
+            upsampled_features.append(x)
+        return upsampled_features[::-1]  # 将特征图顺序反转回正确的顺序
+
+
+
+
 class MLPUNET(nn.Module):
     def __init__(self, detect_num=22):  # 只是定义网络中需要用到的方法
         super(MLPUNET, self).__init__()
@@ -171,10 +196,18 @@ class MLPUNET(nn.Module):
         # 最后一层
         # self.conv = nn.Conv2d(32, 9, kernel_size=(1, 1), padding=0)
         self.head = DetectHead(head_nums=detect_num, in_channles=8)
+        
+        # 将 UNET 当中的下采样的部分提取出来，作为 FPN 的骨干，并生成所需的五张 Logits 图像
+        # Initialize FPN with the output channels of each DownConv stage
+        self.fpn = FPN([8, 8, 16])
+        
+        self.output_layers = nn.ModuleList([
+            nn.Conv2d([8, 8, 16][0], 1, kernel_size=3, padding=1) for _ in range(5)
+        ])
 
     def forward(self, x):
         # print(f"Input shape {x.shape}")
-        # Down Sample
+        # Down Sample 
         R1 = self.DownConv1(x)            # [BatchSize, 32, 320, 320]
         # print(f"R1 shape {R1.shape}")
         # R1m = self.mlp1(R1)
@@ -226,9 +259,16 @@ class MLPUNET(nn.Module):
         a = a + R1
         
         # # 最后一层，隐射到3个特征图
-        output = self.head(a)  # 输出两张 Heatmap
+        heatmap_output = self.head(a)  # 输出两张 Heatmap
+        
+        feature_maps = [R1, R2, R3]
+        
+        # FPN forward pass
+        fpn_features = self.fpn(feature_maps) 
+        
+        logits = [layer(fpn_features[0]) for layer in self.output_layers]
 
-        return output
+        return heatmap_output, logits
 
 
 """
@@ -382,5 +422,5 @@ class FastGesture(nn.Module):
 """
     
 if __name__ == "__main__":
-    net = MLPUNET(detect_num=22).to('cuda')
-    summary(net,  input_size=(1, 320, 320), batch_size=1, device='cuda')
+    net = MLPUNET(detect_num=22).to('cpu')
+    summary(net,  input_size=(1, 320, 320), batch_size=1, device='cpu')

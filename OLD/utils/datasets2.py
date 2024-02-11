@@ -262,7 +262,8 @@ class Datasets(torch.utils.data.Dataset):
             return None
         return keypoints_id.index(id)
     
-    def create_transforms(self, fill=0):
+    @staticmethod
+    def create_transforms(fill=0):
         
         transform_list = []
 
