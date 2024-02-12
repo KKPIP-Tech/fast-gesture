@@ -22,7 +22,7 @@ from fastgesture.layers.detectHead import KeyPointsDH, AscriptionDH, BboxDH
 
 
 class FastGesture(nn.Module):
-    def __init__(self, keypoints_num:int=11) -> None:
+    def __init__(self, keypoints_num:int=11, cls_num:int=5) -> None:
         super().__init__()
         
         # UNET DownSample ---------------------------------
@@ -66,7 +66,7 @@ class FastGesture(nn.Module):
         # Detect Head -------------------------------------
         self.UNETKeypointsDH = KeyPointsDH(head_nums=keypoints_num, in_channles=8)
         self.Ascription = AscriptionDH(in_channles=8)
-        self.BBoxDH = BboxDH(in_channels=8)
+        self.BBoxDH = BboxDH(in_channels=8, cls_num=cls_num)
         
     def forward(self, x):
         

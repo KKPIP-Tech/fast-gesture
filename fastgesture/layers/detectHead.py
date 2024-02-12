@@ -57,21 +57,21 @@ class AscriptionDH(nn.Module):
     
 
 class BboxDH(nn.Module):
-    def __init__(self, in_channels=8) -> None:
+    def __init__(self, in_channels=8, cls_num=5) -> None:
         super(BboxDH, self).__init__()
         
         self.xmatchout = nn.Sequential(
-            nn.Conv2d(in_channels=8, out_channels=1, kernel_size=4, stride=2, padding=1),
+            nn.Conv2d(in_channels=in_channels, out_channels=1, kernel_size=4, stride=2, padding=1),
             nn.ReLU(inplace=True)
         )
         
         self.up3matchx = nn.Sequential(
-            nn.Conv2d(in_channels=8, out_channels=1, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(in_channels=in_channels, out_channels=1, kernel_size=1, stride=1, padding=0),
             nn.ReLU(inplace=True),
         )
         
         self.up2matchx = nn.Sequential(
-            nn.Conv2d(in_channels=8, out_channels=1, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(in_channels=in_channels, out_channels=1, kernel_size=3, stride=1, padding=1),
             nn.ReLU(inplace=True)
         )
         
@@ -87,12 +87,13 @@ class BboxDH(nn.Module):
             self.xywhc.append(head)
         
         self.clsconf = nn.ModuleList()
-        for _ in range(2):
+        for _ in range(cls_num):
             head = nn.Sequential(
                 nn.Conv2d(in_channels=1, out_channels=1, kernel_size=3, padding=1),
                 nn.ReLU(inplace=True),
                 nn.Conv2d(in_channels=1, out_channels=1, kernel_size=3, padding=1),
                 nn.ReLU(inplace=True),
+                
             )
             self.clsconf.append(head)
     

@@ -128,7 +128,7 @@ def train(opt, save_path, resume_pth=None):
     
     # 优化器
     user_set_optim = opt.optimizer
-    # optimizer = select_optim(net=model, opt=opt, user_set_optim=user_set_optim)
+    optimizer = select_optim(net=model, opt=opt, user_set_optim=user_set_optim)
     
     # if resume_pth is not None:
     #     # resume_state_dict = resume_pth['model'].float().state_dict()
