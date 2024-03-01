@@ -9,11 +9,11 @@ def ckpt_save(model, optim, epoch, save_pth, file_name, best=False, last=False):
         "optimizer": deepcopy(optim.state_dict()),
         "epoch": epoch
     }
-    torch.save(ckpt, save_pth + file_name + ".pt")
+    torch.save(ckpt, save_pth + "/" + file_name + ".pt")
     if best:
-        torch.save(ckpt, save_pth + "best.pt")
+        torch.save(ckpt, save_pth + "/best.pt")
     if last:
-        torch.save(ckpt, save_pth + "last.pt")
+        torch.save(ckpt, save_pth + "/last.pt")
         
         
 def ckpt_load(model_path):

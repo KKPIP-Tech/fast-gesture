@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchsummary import summary
 
-# from fastgesture.layers.mlp import MLP
+from fastgesture.layers.dsc import DepthwiseSeparableConv
 
 
 class KeyPointsDH(nn.Module):
@@ -23,6 +23,8 @@ class KeyPointsDH(nn.Module):
                 # nn.BatchNorm2d(in_channles//4),
                 nn.ReLU(inplace=True),
                 nn.Conv2d(in_channles//4, 1, kernel_size=(1, 1), padding=0),
+                # nn.ReLU(inplace=True),
+                # nn.Conv2d(1, 1, kernel_size=(1, 1), padding=0),
                 # nn.ReLU(inplace=True),
                 nn.Sigmoid()
             )
@@ -47,6 +49,8 @@ class AscriptionDH(nn.Module):
                 nn.Conv2d(in_channles//2, in_channles//4, kernel_size=(1, 1), padding=0),
                 nn.ReLU(inplace=True),
                 nn.Conv2d(in_channles//4, 1, kernel_size=(1, 1), padding=0),
+                # nn.Conv2d(1, 1, kernel_size=(1, 1), padding=0),
+                nn.Tanh()
             )
             self.heads.append(head)
         
@@ -59,6 +63,8 @@ class AscriptionDH(nn.Module):
 class BboxDH(nn.Module):
     def __init__(self, in_channels=8, cls_num=5) -> None:
         super(BboxDH, self).__init__()
+        
+        self.dsc = DepthwiseSeparableConv(1, 1)
         
         self.xmatchout = nn.Sequential(
             nn.Conv2d(in_channels=in_channels, out_channels=1, kernel_size=4, stride=2, padding=1),
@@ -82,7 +88,8 @@ class BboxDH(nn.Module):
                 nn.ReLU(inplace=True),
                 nn.Conv2d(in_channels=1, out_channels=1, kernel_size=3, padding=1),
                 nn.ReLU(inplace=True),
-                nn.Sigmoid()
+                nn.Conv2d(1, 1, kernel_size=(1, 1), padding=0),
+                # nn.Sigmoid()
             )
             self.xywhc.append(head)
         
@@ -93,7 +100,8 @@ class BboxDH(nn.Module):
                 nn.ReLU(inplace=True),
                 nn.Conv2d(in_channels=1, out_channels=1, kernel_size=3, padding=1),
                 nn.ReLU(inplace=True),
-                
+                nn.Conv2d(1, 1, kernel_size=(1, 1), padding=0),
+                # nn.Sigmoid()
             )
             self.clsconf.append(head)
     
@@ -106,10 +114,17 @@ class BboxDH(nn.Module):
         
         up2 = F.interpolate(up2, size=(160, 160), mode='bilinear', align_corners=False)
         up2 = self.up2matchx(up2)
-        result = result + up2
+        result = result + up2  # [1, 1, 160, 160]
+        
+        result = self.dsc(result)
+        result = self.dsc(result)
+        result = self.dsc(result)
+        result = self.dsc(result)
         
         return_result = []
         return_result.extend([head(result) for head in self.xywhc])
+        result = self.dsc(result)
+        result = self.dsc(result)
         return_result.extend([head(result) for head in self.clsconf])
         
         return return_result

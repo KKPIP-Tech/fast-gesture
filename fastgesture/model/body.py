@@ -26,47 +26,47 @@ class FastGesture(nn.Module):
         super().__init__()
         
         # UNET DownSample ---------------------------------
-        self.UNETDownConv1 = CommonConv(1, 8)
-        self.UNETDownSample1 = DownSample(8)
+        self.UNETDownConv1 = CommonConv(1, 16)
+        self.UNETDownSample1 = DownSample(16)
         
-        self.UNETDownConv2 = CommonConv(8, 8)  # Use Res Connect
-        self.UNETDownSample2 = DownSample(8)
+        self.UNETDownConv2 = CommonConv(16, 16)  # Use Res Connect
+        self.UNETDownSample2 = DownSample(16)
         
-        self.UNETDownConv3 = CommonConv(8, 16)
-        self.UNETDownSample3 = DownSample(16)
+        self.UNETDownConv3 = CommonConv(16, 32)
+        self.UNETDownSample3 = DownSample(32)
         
-        self.UNETDownConv4 = CommonConv(16, 16)  # Use Res Connect
-        self.UNETDownSample4 = DownSample(16)
+        self.UNETDownConv4 = CommonConv(32, 32)  # Use Res Connect
+        self.UNETDownSample4 = DownSample(32)
         
-        self.UNETDownConv5 = CommonConv(16, 32)
+        self.UNETDownConv5 = CommonConv(32, 64)
         
         # UNET UpSample -----------------------------------
-        self.UNETUpSample1 = UpSample(32)
-        self.UNETUpConv1 = CommonConv(32, 16)
+        self.UNETUpSample1 = UpSample(64)
+        self.UNETUpConv1 = CommonConv(64, 32)
         
-        self.UNETUpSample2 = UpSample(16)
-        self.UNETUpConv2 = CommonConv(24, 8)
+        self.UNETUpSample2 = UpSample(32)
+        self.UNETUpConv2 = CommonConv(48, 16)
         
-        self.UNETUpSample3 = UpSample(8)
-        self.UNETUpConv3 = CommonConv(12, 8)
+        self.UNETUpSample3 = UpSample(16)
+        self.UNETUpConv3 = CommonConv(24, 16)
         
-        self.UNETUpSample4 = UpSample(8)
-        self.UNETUpConv4 = CommonConv(12, 8)
+        self.UNETUpSample4 = UpSample(16)
+        self.UNETUpConv4 = CommonConv(24, 16)
         
         # MLP ---------------------------------------------
-        self.UNETMlp1 = MLP(16)
-        self.UNETMlp2 = MLP(32)
+        self.UNETMlp1 = MLP(32)
+        self.UNETMlp2 = MLP(64)
         
         # DSC ---------------------------------------------
-        self.UNETDSC = DepthwiseSeparableConv(32, 32)
+        self.UNETDSC = DepthwiseSeparableConv(64, 64)
         
-        self.ascriptionUNETOutputDSC = DepthwiseSeparableConv(8, 8)
-        self.ascriptionUNETDownSampleDSC = DepthwiseSeparableConv(8, 8)
+        self.ascriptionUNETOutputDSC = DepthwiseSeparableConv(16, 16)
+        self.ascriptionUNETDownSampleDSC = DepthwiseSeparableConv(16, 16)
         
         # Detect Head -------------------------------------
-        self.UNETKeypointsDH = KeyPointsDH(head_nums=keypoints_num, in_channles=8)
-        self.Ascription = AscriptionDH(in_channles=8)
-        self.BBoxDH = BboxDH(in_channels=8, cls_num=cls_num)
+        self.UNETKeypointsDH = KeyPointsDH(head_nums=keypoints_num, in_channles=16)
+        self.Ascription = AscriptionDH(in_channles=16)
+        self.BBoxDH = BboxDH(in_channels=16, cls_num=cls_num)
         
     def forward(self, x):
         
@@ -127,9 +127,9 @@ class FastGesture(nn.Module):
         ascription_field = self.Ascription(AF_Add)
         
         # Get BBox Result
-        bbox_detect = self.BBoxDH(UNET_output, UP3, UP2) # x,y,w,h,conf,cls,cconf
+        # bbox_detect = self.BBoxDH(UNET_output, UP3, UP2) # x,y,w,h,conf,cls,cconf
                 
-        return heatmaps, ascription_field, bbox_detect
+        return heatmaps, ascription_field
     
 
 if __name__ == "__main__":

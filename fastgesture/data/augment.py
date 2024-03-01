@@ -48,7 +48,7 @@ def letterbox(image, target_shape=(640, 640), fill_color=(72, 72, 72), single_ch
         return image, scale_ratio, left_padding, top_padding
 
 
-def shearing(image:np.ndarray, shearing_factor:float, axis:int=0) -> np.ndarray:
+def shearing_img(image:np.ndarray, shearing_factor:float, axis:int=0) -> np.ndarray:
     """
     对一张灰度图进行Shearing操作。
     
@@ -78,7 +78,8 @@ def shearing(image:np.ndarray, shearing_factor:float, axis:int=0) -> np.ndarray:
 
 if __name__ == "__main__":
     image = cv2.cvtColor(cv2.imread("/home/kd/Documents/Codes/fast-gesture/101.jpg"), cv2.COLOR_BGR2GRAY)
-    new_img = shearing(image=image, shearing_factor=0.2, axis=0)
+    new_img = shearing_img(image=image, shearing_factor=0.5, axis=0)
+    # 示例使用
     cv2.imshow("img shearing", new_img)
     cv2.waitKey(5000)
     pass
