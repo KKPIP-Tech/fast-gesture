@@ -69,8 +69,8 @@ class Datasets(torch.utils.data.Dataset):
     def __getitem__(self, index):
         # get image path, lebel path, name index
         img_path, leb_path = self.datapack[index]
-        print(f"Image Path: {img_path}")
-        print(f"Label Path: {leb_path}")
+        # print(f"Image Path: {img_path}")
+        # print(f"Label Path: {leb_path}")
         
         # image process -----------------------------------
         orin_image = cv2.imread(img_path)
@@ -85,8 +85,8 @@ class Datasets(torch.utils.data.Dataset):
         )
         del grey_image
          
-        cv2.imshow("letterbox_image", letterbox_image)
-        cv2.waitKey(1)
+        # cv2.imshow("letterbox_image", letterbox_image)
+        # cv2.waitKey(1)
         
         # label process -----------------------------------
         with open(leb_path) as label_file:
@@ -146,8 +146,8 @@ class Datasets(torch.utils.data.Dataset):
             left_padding=left_padding,
             top_padding=top_padding
         )
-        cv2.imshow("classfication img", keypoint_classfication_label[0])
-        cv2.waitKey(0)
+        # cv2.imshow("classfication img", keypoint_classfication_label[0])
+        # cv2.waitKey(0)
         
         # get bbox label and gesture label ----------------
         # bbox_label = self.generate_bbox(
@@ -170,17 +170,17 @@ class Datasets(torch.utils.data.Dataset):
             left_padding=left_padding,
             top_padding=top_padding
         )
-        print(f"ascription image: {ascription_field.shape}")
-        cv2.imshow("ascription img", np.transpose(ascription_field, (1, 2, 0))*255)
-        cv2.waitKey(0)
-        
+        # print(f"ascription image: {ascription_field.shape}")
+        # cv2.imshow("ascription img", np.transpose(ascription_field, (1, 2, 0))*255)
+        # cv2.waitKey(0)
+        image = deepcopy(letterbox_image)
         tensor_letterbox_img = transforms.ToTensor()(letterbox_image)
         
         tensor_kp_cls_labels = torch.tensor(np.array(keypoint_classfication_label), dtype=torch.float32)
         # tensor_bbox_labels = torch.tensor(np.array(bbox_label), dtype=torch.float32)
         tensor_ascription_field = torch.tensor(np.array(ascription_field), dtype=torch.float32)
         
-        return tensor_letterbox_img, tensor_kp_cls_labels, tensor_ascription_field
+        return image, tensor_letterbox_img, tensor_kp_cls_labels, tensor_ascription_field
     
     def __len__(self):
         return len(self.datapack)

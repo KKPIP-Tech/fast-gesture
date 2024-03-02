@@ -126,7 +126,11 @@ def train(opt, save_path, resume=None):
         max_loss = 10
         
         for index, datapack in enumerate(pbar):
-            tensor_letterbox_img, tensor_kp_cls_labels, tensor_ascription_field = datapack
+            letterbox_image, tensor_letterbox_img, tensor_kp_cls_labels, tensor_ascription_field = datapack
+            
+            # print(f"Letterbox Image Shape {letterbox_image.shape}")
+            cv2.imshow("Letterbox Image Tensor", letterbox_image[0].cpu().detach().squeeze(0).numpy().astype(np.uint8))
+            
             
             # trans to  target device
             tensor_letterbox_img = tensor_letterbox_img.to(device)  # [Batch, 1, 320, 320]
@@ -157,12 +161,12 @@ def train(opt, save_path, resume=None):
                 # # print("MAX: ", np.max(image_to_show))
                 # cv2.imshow(f"KP Label {kp_i}", image_to_show)
                 # cv2.waitKey(1) # 等待按键事件
-                # image_to_show = f_keypoints_classification.permute(1, 0, 2, 3)[0][kp_i].cpu().detach().numpy().astype(np.float32)
-                # # print(f"img_to_show {image_to_show.shape}")
-                # # image_to_show = image_to_show[0, :, :]
-                # # image_to_show = (image_to_show).astype(np.uint8)
-                # # print("MAX: ", np.max(image_to_show))
-                # cv2.imshow(f"Forward {kp_i}", image_to_show)
+                image_to_show = f_keypoints_classification.permute(1, 0, 2, 3)[0][kp_i].cpu().detach().numpy().astype(np.float32)
+                # print(f"img_to_show {image_to_show.shape}")
+                # image_to_show = image_to_show[0, :, :]
+                # image_to_show = (image_to_show).astype(np.uint8)
+                # print("MAX: ", np.max(image_to_show))
+                cv2.imshow(f"Forward {kp_i}", image_to_show)
                 # cv2.waitKey(1) # 等待按键事件
                 
                 keypoint_regress_loss += criterion_heatmap(f_keypoints_classification[kp_i], tensor_kp_cls_labels[kp_i])
@@ -221,7 +225,7 @@ def train(opt, save_path, resume=None):
             
             # print(np.transpose(image_to_show, (1, 2, 0)))
             cv2.imshow(f"Label", np.transpose(image_to_show, (1, 2, 0))*255)
-            cv2.waitKey(1) # 等待按键事件
+            # cv2.waitKey(1) # 等待按键事件
             image_to_show = f_ascription.permute(1, 0, 2, 3)[0].cpu().detach().numpy()  # .astype(np.float64)
             # print(f"img_to_show {image_to_show.shape}")
             # image_to_show = image_to_show[0, :, :]
