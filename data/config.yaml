@@ -9,7 +9,8 @@
 #     resolution: 图像分辨率。
 #     names: 手势类别的名称列表，包含了每个手势类别的名称。
 
-root: "/home/kd/WD_1_Data4T/Datasets/AmountData3"
+# root: "/home/kd/WD_1_Data4T/Datasets/AmountData3"
+root: "/home/kd/WD_1_Data4T/Datasets/AmountData4"
 
 resolution: [1280, 720]
 
@@ -26,4 +27,6 @@ sigma_x: 0
 sigma_y: 0
 
 max_hand_num: 5
+
+degree: 40
 

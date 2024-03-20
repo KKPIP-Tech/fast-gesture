@@ -18,7 +18,14 @@ import torch.utils.data
 from torchvision import transforms
 from torchvision.transforms import functional as F
 
-from fastgesture.data.augment import letterbox
+from fastgesture.data.augment import (
+    letterbox, 
+    rotate_image, 
+    rotate_point, 
+    resize_image, 
+    resize_point,
+    translate
+)
 from fastgesture.data.generate import get_vxvyd
 
 
@@ -60,6 +67,8 @@ class Datasets(torch.utils.data.Dataset):
         self.target_points_id = config['target_points_id']
         print(f"Your Target Points ID of Mediapipe Is: {self.target_points_id}")
         
+        self.degree = int(config['degree'])
+        
         self.max_hand_num = config['max_hand_num']
         self.datapack = self.load_data(
             names=self.names, 
@@ -72,8 +81,49 @@ class Datasets(torch.utils.data.Dataset):
         # print(f"Image Path: {img_path}")
         # print(f"Label Path: {leb_path}")
         
+        rotate_degree = random.randint(-self.degree, self.degree)
+        
         # image process -----------------------------------
         orin_image = cv2.imread(img_path)
+        
+        B, G, R = cv2.split(orin_image)
+        B = B.astype(float)
+        G = G.astype(float)
+        R = R.astype(float)
+        
+        exposure = random.randint(-200, 150)
+        # print(f"exposure: {exposure}")
+        # 调整曝光度
+        B += exposure
+        G += exposure
+        R += exposure
+        
+        # 保证调整后的像素值仍然在合法范围内 [0, 255]
+        B = np.clip(B, 0, 255)
+        G = np.clip(G, 0, 255)
+        R = np.clip(R, 0, 255)
+        
+        # 转换回 uint8
+        B = B.astype(np.uint8)
+        G = G.astype(np.uint8)
+        R = R.astype(np.uint8)
+        
+        orin_image = cv2.merge((B, G, R))
+        
+        orin_image = self.sp_noise(noise_img=orin_image, proportion=random.uniform(0, 0.4))
+        
+        orin_image, rotate_M = rotate_image(image=orin_image, angle=rotate_degree)
+        # cv2.imshow("orin_image", orin_image)
+        # cv2.waitKey(1)
+        
+        # image center resize
+        resize_scale = random.uniform(0.6 , 1.0)
+        (h, w) = orin_image.shape[:2]
+        center = (w // 2, h // 2)
+        orin_image = resize_image(image=orin_image, scale_factor=resize_scale,
+                                       center=center, fill_color=114)
+        orin_image_height, orin_image_width = orin_image.shape[:2]
+        
         grey_image = cv2.cvtColor(orin_image, cv2.COLOR_BGR2GRAY)
         image_height, image_width = orin_image.shape[:2]
         del orin_image
@@ -84,7 +134,15 @@ class Datasets(torch.utils.data.Dataset):
             single_channel=True
         )
         del grey_image
-         
+        
+        max_offset_value:float = 0.2
+        max_offset = random.randint(0, int(self.height*max_offset_value))
+        letterbox_image, self.trans_off_x, self.trans_off_y = translate(
+            image=letterbox_image,
+            max_offset=max_offset,
+            fill=114
+        )
+        
         # cv2.imshow("letterbox_image", letterbox_image)
         # cv2.waitKey(1)
         
@@ -105,15 +163,25 @@ class Datasets(torch.utils.data.Dataset):
                 # target_id = self.get_keypoints_index(id=int(keypoint['id']))
                 # if target_id is None:
                 #     continue
+                
+                x = int(keypoint['x'])
+                y = int(keypoint['y'])
+                
+                # rotate
+                x, y = rotate_point((x, y), rotate_M)
+                
+                # center scale
+                x, y = resize_point((x, y), scale_factor=resize_scale, image_shape=(orin_image_height, orin_image_width))
+                
                 point = {
                     "id": int(keypoint['id']),
-                    "x": int(keypoint['x']),
-                    "y": int(keypoint['y']),
+                    "x": x,
+                    "y": y,
                     # "z": float(keypoint['z'])
                 }
                 new_points_info.append(point)
-                x_cache.append(int(keypoint['x']))
-                y_cache.append(int(keypoint['y']))
+                x_cache.append(x)
+                y_cache.append(y)
             
             # get center point
             xmax = max(x_cache)
@@ -204,10 +272,13 @@ class Datasets(torch.utils.data.Dataset):
             points = one_hand['points']
             for point in points:
                 id = point['id']
-                x = int(scale_ratio*point['x']) + left_padding - 1
-                x = x if x < self.width else self.width - 1
-                y = int(scale_ratio*point['y']) + top_padding - 1
-                y = y if y < self.height else self.height -1 
+                x = int(scale_ratio*point['x']) + left_padding - 1 + self.trans_off_x
+                # x = x if x < self.width else continue
+                if x >= self.width:
+                    continue
+                y = int(scale_ratio*point['y']) + top_padding - 1 + self.trans_off_y
+                if y >= self.height:
+                    continue
                 temp_heatmap = keypoint_classfication_label[id]
                 # print(f"temp_heatmap x:{x}, y{y}")
                 # print()
@@ -291,30 +362,40 @@ class Datasets(torch.utils.data.Dataset):
             control_points = one_hand['control_point']
             
             # get control point coord in letterbox image
-            cp_x = int(scale_ratio*control_points[0]) + left_padding - 1
-            cp_x = cp_x if cp_x < self.width else self.width - 1
+            cp_x = int(scale_ratio*control_points[0]) + left_padding - 1 + self.trans_off_x
+            # cp_x = cp_x if cp_x < self.width else self.width - 1 
+            if cp_x >= self.width:
+                continue
             cp_x_n = cp_x / self.width
             
-            cp_y = int(scale_ratio*control_points[1]) + top_padding - 1
-            cp_y = cp_y if cp_y < self.height else self.height -1 
+            cp_y = int(scale_ratio*control_points[1]) + top_padding - 1 + self.trans_off_y
+            # cp_y = cp_y if cp_y < self.height else self.height -1 
+            if cp_y >= self.height:
+                continue
             cp_y_n = cp_y / self.height
             
             control_points = (cp_x_n, cp_y_n)
             
             points = one_hand['points']
             for point in points:
-                x = int(scale_ratio*point['x']) + left_padding - 1
-                x = x if x < self.width else self.width - 1
+                x = int(scale_ratio*point['x']) + left_padding - 1 + self.trans_off_x
+                # x = x if x < self.width else self.width - 1 
+                if x >= self.width:
+                    continue
                 x_n = x / self.width
-                y = int(scale_ratio*point['y']) + top_padding - 1
-                y = y if y < self.height else self.height -1 
+                y = int(scale_ratio*point['y']) + top_padding - 1 + self.trans_off_y
+                # y = y if y < self.height else self.height -1 
+                if y >= self.height:
+                    continue
                 y_n = y / self.height
                 
                 point_a = (x_n, y_n)
                 
                 vx, vy, dis = get_vxvyd(point_a=point_a, control_point=control_points)
                 
-                ascription_field[0][y][x] = vx   
+                # print(f"vx, vy, dis: {vx, vy, dis}")
+                
+                ascription_field[0][y][x] = vx 
                 ascription_field[1][y][x] = vy
                 ascription_field[2][y][x] = dis
         
@@ -361,4 +442,30 @@ class Datasets(torch.utils.data.Dataset):
             return None
         return keypoints_id.index(id)
 
+    @staticmethod
+    def sp_noise(noise_img, proportion):
+        '''
+        添加椒盐噪声
+        proportion的值表示加入噪声的量，可根据需要自行调整
+        return: img_noise
+        '''
+        height, width = noise_img.shape[:2]  # 获取高度宽度像素值
+        num = int(height * width * proportion)  # 准备加入的噪声点数量
+
+        # 生成随机位置
+        w_random = np.random.randint(0, width, num)
+        h_random = np.random.randint(0, height, num)
+
+        # 生成随机噪声类型（黑或白）
+        noise_type = np.random.randint(0, 2, num)
+
+        # 对于噪声类型为0的，生成较暗的值
+        mask = noise_type == 0
+        noise_img[h_random[mask], w_random[mask]] = np.random.randint(50, 200, (mask.sum(), 3))
+
+        # 对于噪声类型为1的，生成较亮的值
+        mask = noise_type == 1
+        noise_img[h_random[mask], w_random[mask]] = np.random.randint(200, 254, (mask.sum(), 3))
+
+        return noise_img
     

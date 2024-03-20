@@ -9,6 +9,12 @@ def ckpt_save(model, optim, epoch, save_pth, file_name, best=False, last=False):
         "optimizer": deepcopy(optim.state_dict()),
         "epoch": epoch
     }
+    
+    save_pth = save_pth + "/weights"
+    if not os.path.exists(save_pth):
+        os.makedirs(save_pth)
+        return save_pth
+    
     torch.save(ckpt, save_pth + "/" + file_name + ".pt")
     if best:
         torch.save(ckpt, save_pth + "/best.pt")

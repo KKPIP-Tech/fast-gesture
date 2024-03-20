@@ -17,6 +17,7 @@ import torch
 import torch.nn as nn
 from torch import optim
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 
 from fastgesture.model.body import FastGesture
 from fastgesture.data.datasets import Datasets
@@ -111,6 +112,9 @@ def train(opt, save_path, resume=None):
     user_set_optim = opt.optimizer
     optimizer = select_optim(net=model, opt=opt, user_set_optim=user_set_optim)
     
+    # 初始化 TensorBoard
+    writer = SummaryWriter(log_dir=save_path)
+    
     if resume is not None:
         resume_model, resume_optim, resume_start_epoch = ckpt_load(resume)
         model.load_state_dict(resume_model, strict=True)
@@ -129,8 +133,9 @@ def train(opt, save_path, resume=None):
             letterbox_image, tensor_letterbox_img, tensor_kp_cls_labels, tensor_ascription_field = datapack
             
             # print(f"Letterbox Image Shape {letterbox_image.shape}")
+            # cv2.imshow("Letterbox Image Tensor", cv2.resize(letterbox_image[0].cpu().detach().squeeze(0).numpy().astype(np.uint8), (640, 640)))
             cv2.imshow("Letterbox Image Tensor", letterbox_image[0].cpu().detach().squeeze(0).numpy().astype(np.uint8))
-            
+
             
             # trans to  target device
             tensor_letterbox_img = tensor_letterbox_img.to(device)  # [Batch, 1, 320, 320]
@@ -224,7 +229,9 @@ def train(opt, save_path, resume=None):
             # image_to_show = (image_to_show + 1) / 2
             
             # print(np.transpose(image_to_show, (1, 2, 0)))
+            # cv2.imshow(f"Label", cv2.resize(np.transpose(image_to_show, (1, 2, 0))*255, (640, 640)))
             cv2.imshow(f"Label", np.transpose(image_to_show, (1, 2, 0))*255)
+
             # cv2.waitKey(1) # 等待按键事件
             image_to_show = f_ascription.permute(1, 0, 2, 3)[0].cpu().detach().numpy()  # .astype(np.float64)
             # print(f"img_to_show {image_to_show.shape}")
@@ -277,19 +284,28 @@ def train(opt, save_path, resume=None):
             else:
                 pbar.set_description(f"Epoch {epoch}, avg_l {avg_loss:.10f}")
             
+            # 将 Loss 写入文本文件
+            with open(f"{save_path}/log.txt", "a") as f:
+                f.write(f"Epoch: {epoch}, Batch: {index}, AVG Loss: {avg_loss}, Total Loss: {total_loss}\n")
+
+            # 使用 TensorBoard 记录 Loss
+            writer.add_scalar("Avg Loss", avg_loss, epoch * len(dataloader) + index)
+            writer.add_scalar("Total Loss", total_loss, epoch * len(dataloader) + index)
+            
         ckpt_save(
-            model=model, optim=optimizer, epoch=epoch, save_pth=save_path, file_name=f"ep_{str(epoch)}",
+            model=model, optim=optimizer, epoch=epoch, save_pth=save_path, file_name=f"epoch_{str(epoch)}",
         )
         ckpt_save(
-            model=model, optim=optimizer, epoch=epoch, save_pth=save_path, file_name=f"ep_{str(epoch)}", last=True
+            model=model, optim=optimizer, epoch=epoch, save_pth=save_path, file_name=f"epoch_{str(epoch)}", last=True
         )
+    writer.close()
               
 def run(opt):
     if opt.resume:
         checkpoints = opt.resume if isinstance(opt.resume, str) else None
         if checkpoints is None:
             raise ValueError("Resume Path cannot be empty")
-        resume_path = str(Path(checkpoints).parent)
+        resume_path = str(Path(checkpoints).parent.parent)
         if not os.path.exists(resume_path):
             raise ValueError("Resume Path Not Exists")
         print(f"opt.resume {opt.resume}")
@@ -306,7 +322,7 @@ if __name__ == "__main__":
     parse = argparse.ArgumentParser()
     parse.add_argument('--device', type=str, default='cuda', help='cuda or cpu or mps')
     parse.add_argument('--batch_size', type=int, default=1, help='batch size')
-    parse.add_argument('--img_size', type=int, default=320, help='trian img size')
+    parse.add_argument('--img_size', type=int, default=160, help='trian img size')
     parse.add_argument('--epochs', type=int, default=1000, help='max train epoch')
     parse.add_argument('--data', type=str,default='./data/config.yaml', help='datasets config path')
     parse.add_argument('--save_period', type=int, default=4, help='save per n epoch')
