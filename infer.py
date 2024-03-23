@@ -53,7 +53,7 @@ class FGInfer:
                 
         self.model = FastGesture(
             keypoints_num=self.keypoints_num,
-            cls_num=self.cls_num
+         #   cls_num=self.cls_num
         )
         self.model.to(self.device)
         
@@ -157,15 +157,14 @@ class FGInfer:
                 center_x = point["center_x"]
                 center_y = point["center_y"]
                 conf = point["conf"]
-                vx = ascription_maps[0][center_y, center_x]*160
-                vy = ascription_maps[1][center_y, center_x]*160
-                dis = ascription_maps[2][center_y, center_x]*160
+                vx = ascription_maps[0][center_y, center_x]
+                vy = ascription_maps[1][center_y, center_x]
                 
                 vx = vx*self.img_size[0]
                 vy = vy*self.img_size[1]
                 
                 # print(f"xydis {vx, vy, dis}")
-                end_x, end_y = inverse_vxvyd((center_x, center_y), vx, vy, dis)
+                end_x, end_y = inverse_vxvyd((center_x, center_y), vx, vy)
                 new_points_info:KeypointsCenter = {
                     "keypoint_id": keypoint_id,
                     "center_x": center_x,
@@ -175,7 +174,7 @@ class FGInfer:
                     "end_coord": (int(end_x), int(end_y))
                 }
                 keypoints_points[point_index] = new_points_info
-            
+                
             new_type_info:KeypointsType = {
                 "type": keypoints_type,
                 "points": keypoints_points
@@ -184,7 +183,7 @@ class FGInfer:
     
 if __name__ == "__main__":
     import time
-    weight:str = "/home/kd/Documents/Codes/fast-gesture/run/train/20240311/weights/last.pt"
+    weight:str = "/home/kd/Documents/Codes/fast-gesture/run/train/202403211/weights/last.pt"
     
     fg_model = FGInfer(device='cuda', img_size=(160, 160), weights=weight, conf=0.5, keypoints_num=11)
     

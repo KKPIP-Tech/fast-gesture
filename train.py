@@ -98,7 +98,7 @@ def train(opt, save_path, resume=None):
     )
     
     # set model
-    model = FastGesture(keypoints_num=keypoints_num, cls_num=cls_num).to(device)
+    model = FastGesture(keypoints_num=keypoints_num).to(device)
     
     # set loss
     # Loss函数定义
@@ -230,7 +230,7 @@ def train(opt, save_path, resume=None):
             
             # print(np.transpose(image_to_show, (1, 2, 0)))
             # cv2.imshow(f"Label", cv2.resize(np.transpose(image_to_show, (1, 2, 0))*255, (640, 640)))
-            cv2.imshow(f"Label", np.transpose(image_to_show, (1, 2, 0))*255)
+            cv2.imshow(f"Label", np.transpose(image_to_show, (1, 2, 0)))
 
             # cv2.waitKey(1) # 等待按键事件
             image_to_show = f_ascription.permute(1, 0, 2, 3)[0].cpu().detach().numpy()  # .astype(np.float64)
@@ -239,7 +239,7 @@ def train(opt, save_path, resume=None):
             # image_to_show = (image_to_show).astype(np.uint8)
             # print("MAX: ", np.max(image_to_show))
             # image_to_show = (image_to_show + 1) / 2
-            cv2.imshow(f"f_ascription", (np.transpose(image_to_show, (1, 2, 0))*255))
+            cv2.imshow(f"f_ascription", (np.transpose(image_to_show, (1, 2, 0))))
             cv2.waitKey(1) # 等待按键事件
             
             # if epoch > 2:
@@ -288,9 +288,9 @@ def train(opt, save_path, resume=None):
             with open(f"{save_path}/log.txt", "a") as f:
                 f.write(f"Epoch: {epoch}, Batch: {index}, AVG Loss: {avg_loss}, Total Loss: {total_loss}\n")
 
-            # 使用 TensorBoard 记录 Loss
-            writer.add_scalar("Avg Loss", avg_loss, epoch * len(dataloader) + index)
-            writer.add_scalar("Total Loss", total_loss, epoch * len(dataloader) + index)
+        # 使用 TensorBoard 记录 Loss
+        writer.add_scalar("Avg Loss", avg_loss, epoch * len(dataloader) + index)
+        writer.add_scalar("Total Loss", total_loss, epoch * len(dataloader) + index)
             
         ckpt_save(
             model=model, optim=optimizer, epoch=epoch, save_pth=save_path, file_name=f"epoch_{str(epoch)}",
@@ -322,7 +322,7 @@ if __name__ == "__main__":
     parse = argparse.ArgumentParser()
     parse.add_argument('--device', type=str, default='cuda', help='cuda or cpu or mps')
     parse.add_argument('--batch_size', type=int, default=1, help='batch size')
-    parse.add_argument('--img_size', type=int, default=160, help='trian img size')
+    parse.add_argument('--img_size', type=int, default=224, help='trian img size')
     parse.add_argument('--epochs', type=int, default=1000, help='max train epoch')
     parse.add_argument('--data', type=str,default='./data/config.yaml', help='datasets config path')
     parse.add_argument('--save_period', type=int, default=4, help='save per n epoch')

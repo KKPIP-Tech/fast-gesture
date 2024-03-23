@@ -196,6 +196,8 @@ class Datasets(torch.utils.data.Dataset):
             
             control_point = (center_x, center_y)
             
+            # print(f"control point: {control_point}")
+            
             single_hand_data:PrepocessLabel = {
                 'hand_label': hand_label,
                 'gesture': gesture,
@@ -359,6 +361,9 @@ class Datasets(torch.utils.data.Dataset):
         }
         """
         for one_hand in points_info: 
+            
+            empty_zero = np.zeros((self.height, self.width))
+            
             control_points = one_hand['control_point']
             
             # get control point coord in letterbox image
@@ -374,10 +379,15 @@ class Datasets(torch.utils.data.Dataset):
                 continue
             cp_y_n = cp_y / self.height
             
-            control_points = (cp_x_n, cp_y_n)
+            control_points = (cp_x, cp_y)
+            # control_points = (cp_x_n, cp_y_n)
             
             points = one_hand['points']
             for point in points:
+                
+                point_on_zero = deepcopy(empty_zero)
+                
+                
                 x = int(scale_ratio*point['x']) + left_padding - 1 + self.trans_off_x
                 # x = x if x < self.width else self.width - 1 
                 if x >= self.width:
@@ -389,15 +399,23 @@ class Datasets(torch.utils.data.Dataset):
                     continue
                 y_n = y / self.height
                 
-                point_a = (x_n, y_n)
+                # point_a = (x, y)
+                # point_a = (x_n, y_n)
+                point_on_zero[y][x] = 255                
+                blurred_image = cv2.GaussianBlur(point_on_zero, (5, 5), 0)
+                y_coords, x_coords = np.where(blurred_image > 1)
                 
-                vx, vy, dis = get_vxvyd(point_a=point_a, control_point=control_points)
+                for blur_x, blur_y in zip(x_coords, y_coords):
+                    # print(f"x: {x}, y: {y}")
+                    point_a = (blur_x, blur_y)
                 
-                # print(f"vx, vy, dis: {vx, vy, dis}")
-                
-                ascription_field[0][y][x] = vx 
-                ascription_field[1][y][x] = vy
-                ascription_field[2][y][x] = dis
+                    vx, vy, dis = get_vxvyd(point_a=point_a, control_point=control_points)
+                    
+                    # print(f"vx, vy, dis: {vx, vy, dis}")
+                    
+                    ascription_field[0][blur_y][blur_x] = vx 
+                    ascription_field[1][blur_y][blur_x] = vy
+                    ascription_field[2][blur_y][blur_x] = dis
         
         ascription_field = np.array(ascription_field, dtype=np.float64)
         

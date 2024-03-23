@@ -12,17 +12,22 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchsummary import summary
 
-from fastgesture.layers.conv import CommonConv
 from fastgesture.layers.downSample import DownSample
 from fastgesture.layers.upSample import UpSample
+from fastgesture.layers.conv import (
+    CommonConv, 
+    ASFConv3B3, 
+    ASFConv1B1, 
+    ASFDownSample, 
+    ASFUpSample
+)
 from fastgesture.layers.dsc import DepthwiseSeparableConv
 from fastgesture.layers.mlp import MLP
-
 from fastgesture.layers.detectHead import KeyPointsDH, AscriptionDH, BboxDH
 
 
 class FastGesture(nn.Module):
-    def __init__(self, keypoints_num:int=11, cls_num:int=5) -> None:
+    def __init__(self, keypoints_num:int=11) -> None:
         super().__init__()
         
         # UNET DownSample ---------------------------------
@@ -63,10 +68,26 @@ class FastGesture(nn.Module):
         self.ascriptionUNETOutputDSC = DepthwiseSeparableConv(64, 64)
         self.ascriptionUNETDownSampleDSC = DepthwiseSeparableConv(64, 64)
         
+        # Ascription Field --------------------------------  
+        UNET_output_channel = 64      
+        self.unet_to_asf = nn.Sequential(
+            nn.Conv2d(UNET_output_channel, UNET_output_channel//2, kernel_size=(1, 1), padding=0),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(UNET_output_channel//2, UNET_output_channel//4, kernel_size=(1, 1), padding=0),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(UNET_output_channel//4, UNET_output_channel//8, kernel_size=(1, 1), padding=0),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(UNET_output_channel//8, 1, kernel_size=(1, 1), padding=0),
+            nn.Sigmoid()
+        )
+        self.asf_down_conv = ASFDownSample(inchannels=1, out_channels=16)
+        self.asf_deep_conv = ASFConv3B3(inchannels=16, out_channels=16, kernel=3, stride=1, padding=1)
+        self.asf_light_conv = ASFConv1B1(inchannels=16, out_channels=16, kernel=1)
+        self.asf_up_conv = ASFUpSample(inchannels=16, out_channels=1, kernel=3, stride=1, padding=0)
+        
         # Detect Head -------------------------------------
         self.UNETKeypointsDH = KeyPointsDH(head_nums=keypoints_num, in_channles=64)
-        self.Ascription = AscriptionDH(in_channles=64)
-        self.BBoxDH = BboxDH(in_channels=64, cls_num=cls_num)
+        self.Ascription = AscriptionDH(in_channles=1)
         
     def forward(self, x):
         
@@ -110,30 +131,62 @@ class FastGesture(nn.Module):
         UP4 = self.UNETUpConv4(US4)  # [Batch, 8, 320, 320]
         UNET_output = UP4 + DC1  # [Batch, 8, 320, 320]
         
+        # print(f"U-NET Output Shape: {UNET_output.shape}")
+        
+        asf_unet = self.unet_to_asf(UNET_output)
+        
         # Get Keypoints Classifications Heatmap
         heatmaps = self.UNETKeypointsDH(UNET_output)  # [keypoints_num, Batch, 1, 320, 320]
         
         # Get Ascription Field
-        AF_UOut = self.ascriptionUNETOutputDSC(UNET_output)
-        AF_UOut = self.ascriptionUNETOutputDSC(AF_UOut)
-        AF_UOut = self.ascriptionUNETOutputDSC(AF_UOut)
+        asf_x_down = self.asf_down_conv(x)
+        asf_unet_down = self.asf_down_conv(asf_unet)
         
-        AF_UDS1 = self.ascriptionUNETDownSampleDSC(DC1)
-        AF_UDS1 = self.ascriptionUNETDownSampleDSC(AF_UDS1)
-        AF_UDS1 = self.ascriptionUNETDownSampleDSC(AF_UDS1)
+        asf_deep_out1 = self.asf_deep_conv(asf_unet_down)
+        asf_deep_out2 = self.asf_deep_conv(asf_deep_out1+asf_x_down)
+        asf_deep_out3 = self.asf_deep_conv(asf_deep_out2)
+        asf_deep_out4 = self.asf_deep_conv(asf_deep_out3+asf_x_down)
+        asf_deep_out5 = self.asf_deep_conv(asf_deep_out4)
+        asf_deep_out6 = self.asf_deep_conv(asf_deep_out5+asf_x_down)
         
-        AF_Add = AF_UOut + AF_UDS1  # [Batch, 8, 320, 320]
+        asf_light_out1 = self.asf_light_conv(asf_deep_out6)
+        asf_light_out2 = self.asf_light_conv(asf_light_out1+asf_x_down)
+        
+        asf_stage1 = asf_light_out2 + asf_unet_down + asf_x_down
+        
+        # asf_deep_out1 = self.asf_deep_conv(asf_stage1)
+        # asf_deep_out2 = self.asf_deep_conv(asf_deep_out1+asf_x_down)
+        # asf_deep_out3 = self.asf_deep_conv(asf_deep_out2)
+        # asf_deep_out4 = self.asf_deep_conv(asf_deep_out3+asf_x_down)
+        # asf_deep_out5 = self.asf_deep_conv(asf_deep_out4)
+        # asf_deep_out6 = self.asf_deep_conv(asf_deep_out5+asf_x_down)
+        
+        # asf_light_out1 = self.asf_light_conv(asf_deep_out6)
+        # asf_light_out2 = self.asf_light_conv(asf_light_out1+asf_x_down)
+        
+        # asf_stage1 = asf_light_out2 + asf_stage1 + asf_unet_down + asf_x_down
+        
+        asf_up = self.asf_up_conv(asf_stage1)
+        
+        # asf_stage2 = asf_light_out2 + asf_stage1
+        
+        # AF_UOut = self.ascriptionUNETOutputDSC(UNET_output)
+        # AF_UOut = self.ascriptionUNETOutputDSC(AF_UOut)
+        # AF_UOut = self.ascriptionUNETOutputDSC(AF_UOut)
+        
+        # AF_UDS1 = self.ascriptionUNETDownSampleDSC(DC1)
+        # AF_UDS1 = self.ascriptionUNETDownSampleDSC(AF_UDS1)
+        # AF_UDS1 = self.ascriptionUNETDownSampleDSC(AF_UDS1)
+        
+        # AF_Add = AF_UOut + AF_UDS1  # [Batch, 8, 320, 320]
 
-        ascription_field = self.Ascription(AF_Add)
-        
-        # Get BBox Result
-        # bbox_detect = self.BBoxDH(UNET_output, UP3, UP2) # x,y,w,h,conf,cls,cconf
-                
+        ascription_field = self.Ascription(asf_up)
+                        
         return heatmaps, ascription_field
     
 
 if __name__ == "__main__":
     net = FastGesture(keypoints_num=11).to('cuda')
-    summary(net, input_size=(1, 320, 320), batch_size=-1, device='cuda')
+    summary(net, input_size=(1, 160, 160), batch_size=-1, device='cuda')
     
     

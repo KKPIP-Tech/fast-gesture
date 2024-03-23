@@ -25,7 +25,7 @@ def get_vxvyd(control_point:tuple, point_a:tuple) -> (float):
     
     return x_vector, y_vector, distance
 
-def inverse_vxvyd(point_a: tuple, x_vector: float, y_vector: float, distance: float) -> tuple:
+def inverse_vxvyd(point_a: tuple, x_vector: float, y_vector: float) -> tuple:
     """
     根据点 A、x 向量、y 向量以及两点之间的距离逆推目标点的坐标。
     
@@ -33,7 +33,6 @@ def inverse_vxvyd(point_a: tuple, x_vector: float, y_vector: float, distance: fl
     - point_a: 点 A 的坐标，格式为 (x, y)，其中 x 和 y 是归一化的值。
     - x_vector: 从点 A 到目标点的 x 向量。
     - y_vector: 从点 A 到目标点的 y 向量。
-    - distance: 点 A 与目标点之间的距离。
     
     返回值:
     - control_point: 目标点的坐标，格式为 (x, y)。

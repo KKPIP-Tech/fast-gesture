@@ -46,20 +46,18 @@ class AscriptionDH(nn.Module):
         
         for _ in range(3):
             head = nn.Sequential(
-                nn.Conv2d(in_channles, in_channles//2, kernel_size=(1, 1), padding=0),
-                nn.ReLU(inplace=True),
-                nn.Tanh(),
-                nn.Conv2d(in_channles//2, in_channles//4, kernel_size=(1, 1), padding=0),
-                nn.ReLU(inplace=True),
-                nn.Tanh(),
-                nn.Conv2d(in_channles//4, in_channles//8, kernel_size=(1, 1), padding=0),
-                nn.ReLU(inplace=True),
-                nn.Tanh(),
-                nn.Conv2d(in_channles//8, 1, kernel_size=(1, 1), padding=0),
-                # nn.ReLU(inplace=True),
-                # nn.ReLU(inplace=True),
-                # nn.Conv2d(1, 1, kernel_size=(1, 1), padding=0),
-                nn.Tanh()
+                nn.Conv2d(1, 8, kernel_size=(1, 1), padding=0),
+                nn.ReLU(),
+                # nn.Tanh(),
+                nn.Conv2d(8, 16, kernel_size=(1, 1), padding=0),
+                nn.ReLU(),
+                # nn.Tanh(),
+                nn.Conv2d(16, 8, kernel_size=(1, 1), padding=0),
+                nn.ReLU(),
+                # nn.Tanh(),
+                nn.Conv2d(8, 1, kernel_size=(1, 1), padding=0),
+                # nn.ReLU(),
+                # nn.Tanh(),
             )
             self.heads.append(head)
         
@@ -137,5 +135,4 @@ class BboxDH(nn.Module):
         return_result.extend([head(result) for head in self.clsconf])
         
         return return_result
-    
 
