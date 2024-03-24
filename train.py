@@ -230,7 +230,7 @@ def train(opt, save_path, resume=None):
             
             # print(np.transpose(image_to_show, (1, 2, 0)))
             # cv2.imshow(f"Label", cv2.resize(np.transpose(image_to_show, (1, 2, 0))*255, (640, 640)))
-            cv2.imshow(f"Label", np.transpose(image_to_show, (1, 2, 0)))
+            cv2.imshow(f"Label", np.transpose(image_to_show, (1, 2, 0))*255)
 
             # cv2.waitKey(1) # 等待按键事件
             image_to_show = f_ascription.permute(1, 0, 2, 3)[0].cpu().detach().numpy()  # .astype(np.float64)
@@ -239,7 +239,7 @@ def train(opt, save_path, resume=None):
             # image_to_show = (image_to_show).astype(np.uint8)
             # print("MAX: ", np.max(image_to_show))
             # image_to_show = (image_to_show + 1) / 2
-            cv2.imshow(f"f_ascription", (np.transpose(image_to_show, (1, 2, 0))))
+            cv2.imshow(f"f_ascription", np.transpose(image_to_show, (1, 2, 0))*255)
             cv2.waitKey(1) # 等待按键事件
             
             # if epoch > 2:
@@ -289,8 +289,8 @@ def train(opt, save_path, resume=None):
                 f.write(f"Epoch: {epoch}, Batch: {index}, AVG Loss: {avg_loss}, Total Loss: {total_loss}\n")
 
         # 使用 TensorBoard 记录 Loss
-        writer.add_scalar("Avg Loss", avg_loss, epoch * len(dataloader) + index)
-        writer.add_scalar("Total Loss", total_loss, epoch * len(dataloader) + index)
+        writer.add_scalar("Avg Loss", avg_loss, epoch)
+        writer.add_scalar("Total Loss", total_loss, epoch)
             
         ckpt_save(
             model=model, optim=optimizer, epoch=epoch, save_pth=save_path, file_name=f"epoch_{str(epoch)}",

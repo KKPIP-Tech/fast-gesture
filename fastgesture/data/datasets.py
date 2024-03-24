@@ -379,8 +379,8 @@ class Datasets(torch.utils.data.Dataset):
                 continue
             cp_y_n = cp_y / self.height
             
-            control_points = (cp_x, cp_y)
-            # control_points = (cp_x_n, cp_y_n)
+            # control_points = (cp_x, cp_y)
+            control_points = (cp_x_n, cp_y_n)
             
             points = one_hand['points']
             for point in points:
@@ -392,12 +392,12 @@ class Datasets(torch.utils.data.Dataset):
                 # x = x if x < self.width else self.width - 1 
                 if x >= self.width:
                     continue
-                x_n = x / self.width
+                # x_n = x / self.width
                 y = int(scale_ratio*point['y']) + top_padding - 1 + self.trans_off_y
                 # y = y if y < self.height else self.height -1 
                 if y >= self.height:
                     continue
-                y_n = y / self.height
+                # y_n = y / self.height
                 
                 # point_a = (x, y)
                 # point_a = (x_n, y_n)
@@ -407,7 +407,7 @@ class Datasets(torch.utils.data.Dataset):
                 
                 for blur_x, blur_y in zip(x_coords, y_coords):
                     # print(f"x: {x}, y: {y}")
-                    point_a = (blur_x, blur_y)
+                    point_a = (blur_x/self.width, blur_y/self.height)
                 
                     vx, vy, dis = get_vxvyd(point_a=point_a, control_point=control_points)
                     
