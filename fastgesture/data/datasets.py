@@ -232,7 +232,7 @@ class Datasets(torch.utils.data.Dataset):
         # cv2.waitKey(1)
         
         # get ascription field
-        ascription_field = self.get_ascription(
+        ascription_field, ascription_mask = self.get_ascription(
             points_info=preprocess_points_info,
             img_height=image_height,
             img_width=image_width,
@@ -249,8 +249,9 @@ class Datasets(torch.utils.data.Dataset):
         tensor_kp_cls_labels = torch.tensor(np.array(keypoint_classfication_label), dtype=torch.float32)
         # tensor_bbox_labels = torch.tensor(np.array(bbox_label), dtype=torch.float32)
         tensor_ascription_field = torch.tensor(np.array(ascription_field), dtype=torch.float32)
+        tensor_ascription_mask = transforms.ToTensor()(ascription_mask)
         
-        return image, tensor_letterbox_img, tensor_kp_cls_labels, tensor_ascription_field
+        return image, tensor_letterbox_img, tensor_kp_cls_labels, tensor_ascription_field, tensor_ascription_mask
     
     def __len__(self):
         return len(self.datapack)
@@ -345,6 +346,8 @@ class Datasets(torch.utils.data.Dataset):
         
         empty_field_map = np.zeros((self.height, self.width))
         
+        ascription_mask = deepcopy(empty_field_map)
+        
         ascription_field = [
             deepcopy(empty_field_map),  # vector x
             deepcopy(empty_field_map),  # vector y
@@ -416,10 +419,11 @@ class Datasets(torch.utils.data.Dataset):
                     ascription_field[0][blur_y][blur_x] = vx 
                     ascription_field[1][blur_y][blur_x] = vy
                     ascription_field[2][blur_y][blur_x] = dis
+                    ascription_mask[blur_y][blur_x] = 1
         
         ascription_field = np.array(ascription_field, dtype=np.float64)
         
-        return ascription_field
+        return ascription_field, ascription_mask
             
     @staticmethod
     def load_data(names, datasets_path, limit:int = None):

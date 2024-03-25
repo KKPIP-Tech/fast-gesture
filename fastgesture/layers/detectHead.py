@@ -48,16 +48,16 @@ class AscriptionDH(nn.Module):
             head = nn.Sequential(
                 nn.Conv2d(1, 8, kernel_size=(1, 1), padding=0),
                 nn.ReLU(),
-                # nn.Tanh(),
+                nn.Tanh(),
                 nn.Conv2d(8, 16, kernel_size=(1, 1), padding=0),
                 nn.ReLU(),
-                # nn.Tanh(),
+                nn.Tanh(),
                 nn.Conv2d(16, 8, kernel_size=(1, 1), padding=0),
                 nn.ReLU(),
-                # nn.Tanh(),
+                nn.Tanh(),
                 nn.Conv2d(8, 1, kernel_size=(1, 1), padding=0),
                 # nn.ReLU(),
-                # nn.Tanh(),
+                nn.Tanh(),
             )
             self.heads.append(head)
         

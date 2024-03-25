@@ -104,9 +104,9 @@ def train(opt, save_path, resume=None):
     # Loss函数定义
     # criterion_heatmap = FocalLoss(alpha=2, gamma=2)
     criterion_heatmap = nn.MSELoss().to(device=device)
-    criterion_bbox = nn.L1Loss().to(device=device)
-    criterion_confidence = nn.BCEWithLogitsLoss().to(device=device)
-    criterion_ascription = nn.SmoothL1Loss(beta=0.5).to(device=device)
+    # criterion_bbox = nn.L1Loss().to(device=device)
+    # criterion_confidence = nn.BCEWithLogitsLoss().to(device=device)
+    criterion_ascription = nn.SmoothL1Loss(reduction='sum').to(device=device)
     
     # set optimizer
     user_set_optim = opt.optimizer
@@ -130,7 +130,7 @@ def train(opt, save_path, resume=None):
         max_loss = 10
         
         for index, datapack in enumerate(pbar):
-            letterbox_image, tensor_letterbox_img, tensor_kp_cls_labels, tensor_ascription_field = datapack
+            letterbox_image, tensor_letterbox_img, tensor_kp_cls_labels, tensor_ascription_field, tensor_ascription_mask = datapack
             
             # print(f"Letterbox Image Shape {letterbox_image.shape}")
             # cv2.imshow("Letterbox Image Tensor", cv2.resize(letterbox_image[0].cpu().detach().squeeze(0).numpy().astype(np.uint8), (640, 640)))
@@ -142,6 +142,8 @@ def train(opt, save_path, resume=None):
             tensor_kp_cls_labels = tensor_kp_cls_labels.permute(1, 0, 2, 3).to(device)  # [11, Batch, 320, 320]
             # tensor_bbox_labels = tensor_bbox_labels.permute(1, 0, 2, 3).to(device)  # [5 + names_num, Batch, 160, 160]
             tensor_ascription_field = tensor_ascription_field.permute(1, 0, 2, 3).to(device)  # [3, Batch, 320, 320]
+            
+            tensor_ascription_mask = tensor_ascription_mask.permute(1, 0, 2, 3).to(device)
             
             optimizer.zero_grad()
             
@@ -219,7 +221,11 @@ def train(opt, save_path, resume=None):
             
             asf_loss = 0.0
             for asf_i in range(3):
-                asf_loss += criterion_ascription(f_ascription[asf_i], tensor_ascription_field[asf_i])
+                asf_loss += criterion_ascription(
+                    f_ascription[asf_i]*tensor_ascription_mask, tensor_ascription_field[asf_i]*tensor_ascription_mask
+                )
+            
+            asf_loss = asf_loss/((tensor_ascription_mask.sum() + 1e-6)*3)
             
             image_to_show = tensor_ascription_field.permute(1, 0, 2, 3)[0].cpu().detach().numpy()  # .astype(np.float64)
             # print(f"img_to_show {image_to_show.shape}")
@@ -322,7 +328,7 @@ if __name__ == "__main__":
     parse = argparse.ArgumentParser()
     parse.add_argument('--device', type=str, default='cuda', help='cuda or cpu or mps')
     parse.add_argument('--batch_size', type=int, default=1, help='batch size')
-    parse.add_argument('--img_size', type=int, default=224, help='trian img size')
+    parse.add_argument('--img_size', type=int, default=160, help='trian img size')
     parse.add_argument('--epochs', type=int, default=1000, help='max train epoch')
     parse.add_argument('--data', type=str,default='./data/config.yaml', help='datasets config path')
     parse.add_argument('--save_period', type=int, default=4, help='save per n epoch')
