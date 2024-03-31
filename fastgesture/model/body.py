@@ -142,17 +142,17 @@ class FastGesture(nn.Module):
         asf_x_down = self.asf_down_conv(x)
         asf_unet_down = self.asf_down_conv(asf_unet)
         
-        asf_deep_out1 = self.asf_deep_conv(asf_unet_down)
+        asf_deep_out1 = self.asf_deep_conv(asf_unet_down+asf_x_down)
         asf_deep_out2 = self.asf_deep_conv(asf_deep_out1)
-        asf_deep_out3 = self.asf_deep_conv(asf_deep_out2)
+        asf_deep_out3 = self.asf_deep_conv(asf_deep_out2+asf_x_down)
         asf_deep_out4 = self.asf_deep_conv(asf_deep_out3)
-        asf_deep_out5 = self.asf_deep_conv(asf_deep_out4)
+        asf_deep_out5 = self.asf_deep_conv(asf_deep_out4+asf_x_down)
         asf_deep_out6 = self.asf_deep_conv(asf_deep_out5)
         
         asf_light_out1 = self.asf_light_conv(asf_deep_out6)
         asf_light_out2 = self.asf_light_conv(asf_light_out1+asf_x_down)
         
-        asf_stage1 = asf_light_out2 + asf_unet_down + asf_x_down
+        asf_stage1 = asf_light_out2 + asf_unet_down# + asf_x_down
         
         # asf_deep_out1 = self.asf_deep_conv(asf_stage1)
         # asf_deep_out2 = self.asf_deep_conv(asf_deep_out1+asf_x_down)

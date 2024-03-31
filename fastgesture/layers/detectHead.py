@@ -46,18 +46,20 @@ class AscriptionDH(nn.Module):
         
         for _ in range(3):
             head = nn.Sequential(
-                nn.Conv2d(1, 8, kernel_size=(1, 1), padding=0),
-                nn.ReLU(),
-                nn.Tanh(),
-                nn.Conv2d(8, 16, kernel_size=(1, 1), padding=0),
-                nn.ReLU(),
-                nn.Tanh(),
-                nn.Conv2d(16, 8, kernel_size=(1, 1), padding=0),
-                nn.ReLU(),
-                nn.Tanh(),
-                nn.Conv2d(8, 1, kernel_size=(1, 1), padding=0),
+                # nn.Conv2d(1, 8, kernel_size=(1, 1), padding=0),
+                # nn.ReLU(inplace=True),
+                # # nn.Tanh(),
+                # nn.Conv2d(8, 16, kernel_size=(1, 1), padding=0),
+                # nn.ReLU(inplace=True),
+                # # nn.Tanh(),
+                # nn.Conv2d(16, 8, kernel_size=(1, 1), padding=0),
+                # nn.ReLU(inplace=True),
+                # # nn.Tanh(),
+                # nn.Conv2d(8, 1, kernel_size=(1, 1), padding=0),
+                nn.Conv2d(1, 1, kernel_size=(1, 1), padding=0),
                 # nn.ReLU(),
-                nn.Tanh(),
+                # nn.Tanh(),
+                nn.Sigmoid()
             )
             self.heads.append(head)
         

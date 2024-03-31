@@ -221,13 +221,17 @@ def train(opt, save_path, resume=None):
             
             asf_loss = 0.0
             for asf_i in range(3):
+                # asf_loss += criterion_ascription(
+                #     f_ascription[asf_i]*tensor_ascription_mask, tensor_ascription_field[asf_i]*tensor_ascription_mask
+                # )
                 asf_loss += criterion_ascription(
-                    f_ascription[asf_i]*tensor_ascription_mask, tensor_ascription_field[asf_i]*tensor_ascription_mask
+                    f_ascription[asf_i], tensor_ascription_field[asf_i]
                 )
             
             asf_loss = asf_loss/((tensor_ascription_mask.sum() + 1e-6)*3)
             
             image_to_show = tensor_ascription_field.permute(1, 0, 2, 3)[0].cpu().detach().numpy()  # .astype(np.float64)
+            # print(f"ASF Max: {np.max(image_to_show)}")
             # print(f"img_to_show {image_to_show.shape}")
             # image_to_show = image_to_show[0, :, :]
             # image_to_show = (image_to_show).astype(np.uint8)
@@ -236,7 +240,7 @@ def train(opt, save_path, resume=None):
             
             # print(np.transpose(image_to_show, (1, 2, 0)))
             # cv2.imshow(f"Label", cv2.resize(np.transpose(image_to_show, (1, 2, 0))*255, (640, 640)))
-            cv2.imshow(f"Label", np.transpose(image_to_show, (1, 2, 0))*255)
+            cv2.imshow(f"Label", np.transpose(image_to_show, (1, 2, 0)))
 
             # cv2.waitKey(1) # 等待按键事件
             image_to_show = f_ascription.permute(1, 0, 2, 3)[0].cpu().detach().numpy()  # .astype(np.float64)
@@ -245,7 +249,7 @@ def train(opt, save_path, resume=None):
             # image_to_show = (image_to_show).astype(np.uint8)
             # print("MAX: ", np.max(image_to_show))
             # image_to_show = (image_to_show + 1) / 2
-            cv2.imshow(f"f_ascription", np.transpose(image_to_show, (1, 2, 0))*255)
+            cv2.imshow(f"f_ascription", np.transpose(image_to_show, (1, 2, 0)))
             cv2.waitKey(1) # 等待按键事件
             
             # if epoch > 2:
@@ -253,7 +257,9 @@ def train(opt, save_path, resume=None):
             
             # loss += asf_loss # / 3
             
-            loss = (keypoint_regress_loss / tensor_kp_cls_labels.shape[0])*0.6 + (asf_loss/3)*0.4
+            # loss = (keypoint_regress_loss / tensor_kp_cls_labels.shape[0])*0.6 + (asf_loss/3)*0.4
+            
+            loss = (keypoint_regress_loss / tensor_kp_cls_labels.shape[0])*0.1 + (asf_loss/3)*0.9
             
             # loss_heatmap = criterion_heatmap(f_keypoints_classification, tensor_kp_cls_labels)
             # # loss_bbox = criterion_bbox(f_bbox_label[:, :5, :, :], tensor_bbox_labels[:, :5, :, :])

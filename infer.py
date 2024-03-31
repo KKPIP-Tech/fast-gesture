@@ -92,7 +92,7 @@ class FGInfer:
         
         ascription_maps:list = []
         for asf_index in range(3):  # 3 for vx, vy, dis
-            ascription_field_map = f_ascription.permute(1, 0, 2, 3)[0][asf_index].cpu().detach().numpy()
+            ascription_field_map = f_ascription.permute(1, 0, 2, 3)[0][asf_index].cpu().detach().numpy().astype(np.float32)
             ascription_maps.append(ascription_field_map)
         
         self.get_asf_direction(ascription_maps=ascription_maps)
@@ -183,9 +183,9 @@ class FGInfer:
     
 if __name__ == "__main__":
     import time
-    weight:str = "/home/kd/Documents/Codes/fast-gesture/run/train/202403211/weights/last.pt"
+    weight:str = "/home/kd/Documents/Codes/fast-gesture/run/train/20240324/weights/last.pt"
     
-    fg_model = FGInfer(device='cuda', img_size=(160, 160), weights=weight, conf=0.5, keypoints_num=11)
+    fg_model = FGInfer(device='cuda', img_size=(160, 160), weights=weight, conf=0.2, keypoints_num=11)
     
     capture = cv2.VideoCapture(0)
     

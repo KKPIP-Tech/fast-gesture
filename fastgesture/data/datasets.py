@@ -416,9 +416,9 @@ class Datasets(torch.utils.data.Dataset):
                     
                     # print(f"vx, vy, dis: {vx, vy, dis}")
                     
-                    ascription_field[0][blur_y][blur_x] = vx 
-                    ascription_field[1][blur_y][blur_x] = vy
-                    ascription_field[2][blur_y][blur_x] = dis
+                    ascription_field[0][blur_y][blur_x] = (vx + 1)/2
+                    ascription_field[1][blur_y][blur_x] = (vy + 1)/2
+                    ascription_field[2][blur_y][blur_x] = (dis + 1)/2
                     ascription_mask[blur_y][blur_x] = 1
         
         ascription_field = np.array(ascription_field, dtype=np.float64)
