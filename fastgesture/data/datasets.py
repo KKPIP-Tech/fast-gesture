@@ -30,7 +30,7 @@ from fastgesture.data.generate import get_vxvyd
 
 
 class Points(TypedDict):
-    id: int
+    point_id: int
     x: float
     y: float
     z: float
@@ -142,7 +142,7 @@ class Datasets(torch.utils.data.Dataset):
             max_offset=max_offset,
             fill=114
         )
-        
+        self.draw_copy = deepcopy(letterbox_image)
         # cv2.imshow("letterbox_image", letterbox_image)
         # cv2.waitKey(1)
         
@@ -164,8 +164,8 @@ class Datasets(torch.utils.data.Dataset):
                 # if target_id is None:
                 #     continue
                 
-                x = int(keypoint['x'])
-                y = int(keypoint['y'])
+                x = int(keypoint['x']) #+ left_padding - 1 + self.trans_off_x
+                y = int(keypoint['y']) #+ top_padding - 1 + self.trans_off_y
                 
                 # rotate
                 x, y = rotate_point((x, y), rotate_M)
@@ -173,8 +173,13 @@ class Datasets(torch.utils.data.Dataset):
                 # center scale
                 x, y = resize_point((x, y), scale_factor=resize_scale, image_shape=(orin_image_height, orin_image_width))
                 
+                # add 
+                
+                x = (x*scale_ratio) + left_padding + self.trans_off_x 
+                y = (y*scale_ratio) + top_padding + self.trans_off_y
+                
                 point = {
-                    "id": int(keypoint['id']),
+                    "point_id": int(keypoint['id']),
                     "x": x,
                     "y": y,
                     # "z": float(keypoint['z'])
@@ -234,8 +239,8 @@ class Datasets(torch.utils.data.Dataset):
         # get ascription field
         ascription_field, ascription_mask = self.get_ascription(
             points_info=preprocess_points_info,
-            img_height=image_height,
-            img_width=image_width,
+            # img_height=image_height,
+            # img_width=image_width,
             scale_ratio=scale_ratio,
             left_padding=left_padding,
             top_padding=top_padding
@@ -274,15 +279,15 @@ class Datasets(torch.utils.data.Dataset):
         for one_hand in points_info: 
             points = one_hand['points']
             for point in points:
-                id = point['id']
-                x = int(scale_ratio*point['x']) + left_padding - 1 + self.trans_off_x
+                point_id = point['point_id']
+                x = int(point['x']) # + left_padding - 1 + self.trans_off_x
                 # x = x if x < self.width else continue
                 if x >= self.width:
                     continue
-                y = int(scale_ratio*point['y']) + top_padding - 1 + self.trans_off_y
+                y = int(point['y']) # + top_padding - 1 + self.trans_off_y
                 if y >= self.height:
                     continue
-                temp_heatmap = keypoint_classfication_label[id]
+                temp_heatmap = keypoint_classfication_label[point_id]
                 # print(f"temp_heatmap x:{x}, y{y}")
                 # print()
                 
@@ -297,62 +302,61 @@ class Datasets(torch.utils.data.Dataset):
                 temp_heatmap[mask] = 1
                 
                 # temp_heatmap[y][x] = 1
-                keypoint_classfication_label[id] = temp_heatmap
+                keypoint_classfication_label[point_id] = temp_heatmap
 
         return keypoint_classfication_label
     
-    def generate_bbox(self, points_info:List[PrepocessLabel], img_height, img_width, scale_ratio, left_padding, top_padding)->list:
+    # def generate_bbox(self, points_info:List[PrepocessLabel], img_height, img_width, scale_ratio, left_padding, top_padding)->list:
         
-        empty_label = np.zeros((160, 160))
-        bbox_label = [
-            deepcopy(empty_label) for _ in range(5)
-        ]
+    #     empty_label = np.zeros((160, 160))
+    #     bbox_label = [
+    #         deepcopy(empty_label) for _ in range(5)
+    #     ]
         
-        cls_label = [
-            deepcopy(empty_label) for _ in range(len(self.names))
-        ]
+    #     cls_label = [
+    #         deepcopy(empty_label) for _ in range(len(self.names))
+    #     ]
         
-        scales = 2
+    #     scales = 2
         
-        for one_hand in points_info:
-            cx, cy, w, h = one_hand['bbox']
-            gesture = one_hand['gesture']
+    #     for one_hand in points_info:
+    #         cx, cy, w, h = one_hand['bbox']
+    #         gesture = one_hand['gesture']
             
-            x = int((int(scale_ratio*cx) + int(left_padding) - 1)/scales)
-            x = x if x < self.width else self.width - 1
-            y = int((int(scale_ratio*cy) + int(top_padding) - 1)/scales)
-            y = y if y < self.height else self.height -1 
+    #         x = int((int(scale_ratio*cx) + int(left_padding) - 1)/scales)
+    #         x = x if x < self.width else self.width - 1
+    #         y = int((int(scale_ratio*cy) + int(top_padding) - 1)/scales)
+    #         y = y if y < self.height else self.height -1 
                         
-            bbox_label[0][y][x] = cx
-            bbox_label[1][y][x] = cy
-            bbox_label[2][y][x] = w
-            bbox_label[3][y][x] = h
+    #         bbox_label[0][y][x] = cx
+    #         bbox_label[1][y][x] = cy
+    #         bbox_label[2][y][x] = w
+    #         bbox_label[3][y][x] = h
 
-            w = int(int(img_width*scale_ratio)*w) + int(top_padding) - 1
-            w = w if w < self.width else self.width -1 
-            h = int(int(img_height*scale_ratio)*h) + int(top_padding) - 1
-            h = h if h < self.height else self.height -1 
+    #         w = int(int(img_width*scale_ratio)*w) + int(top_padding) - 1
+    #         w = w if w < self.width else self.width -1 
+    #         h = int(int(img_height*scale_ratio)*h) + int(top_padding) - 1
+    #         h = h if h < self.height else self.height -1 
             
-            cls_label[gesture][
-                int(y-(h/4/scales)):int(y+(h/4/scales)),
-                int(x-(w/4/scales)):int(x+(w/4/scales)) 
-            ] = 1
+    #         cls_label[gesture][
+    #             int(y-(h/4/scales)):int(y+(h/4/scales)),
+    #             int(x-(w/4/scales)):int(x+(w/4/scales)) 
+    #         ] = 1
         
-        bbox_label.extend(cls_label)
+    #     bbox_label.extend(cls_label)
         
-        return bbox_label
+    #     return bbox_label
     
-    def get_ascription(self, points_info:List[PrepocessLabel], img_height, img_width, scale_ratio, left_padding, top_padding)->list:
+    def get_ascription(self, points_info:List[PrepocessLabel], scale_ratio, left_padding, top_padding)->list:
         
         empty_field_map = np.zeros((self.height, self.width))
         
         ascription_mask = deepcopy(empty_field_map)
         
-        ascription_field = [
-            deepcopy(empty_field_map),  # vector x
-            deepcopy(empty_field_map),  # vector y
-            deepcopy(empty_field_map),  # distance
-        ]
+        keypoints_number = len(self.target_points_id)
+        
+        ascription_field = [deepcopy(empty_field_map) for _ in range(keypoints_number*2)]  # x and y for one keypoint
+        
         
         """
         single_hand_data = {
@@ -370,13 +374,13 @@ class Datasets(torch.utils.data.Dataset):
             control_points = one_hand['control_point']
             
             # get control point coord in letterbox image
-            cp_x = int(scale_ratio*control_points[0]) + left_padding - 1 + self.trans_off_x
+            cp_x = int(control_points[0]) # + left_padding - 1 + self.trans_off_x
             # cp_x = cp_x if cp_x < self.width else self.width - 1 
             if cp_x >= self.width:
                 continue
             cp_x_n = cp_x / self.width
             
-            cp_y = int(scale_ratio*control_points[1]) + top_padding - 1 + self.trans_off_y
+            cp_y = int(control_points[1]) # + top_padding - 1 + self.trans_off_y
             # cp_y = cp_y if cp_y < self.height else self.height -1 
             if cp_y >= self.height:
                 continue
@@ -387,16 +391,16 @@ class Datasets(torch.utils.data.Dataset):
             
             points = one_hand['points']
             for point in points:
-                
+                point_id = point["point_id"]
+                # print(f"point id in asf: {point_id}")
                 point_on_zero = deepcopy(empty_zero)
                 
-                
-                x = int(scale_ratio*point['x']) + left_padding - 1 + self.trans_off_x
+                x = int(point['x']) # + left_padding - 1 + self.trans_off_x
                 # x = x if x < self.width else self.width - 1 
                 if x >= self.width:
                     continue
                 # x_n = x / self.width
-                y = int(scale_ratio*point['y']) + top_padding - 1 + self.trans_off_y
+                y = int(point['y']) # + top_padding - 1 + self.trans_off_y
                 # y = y if y < self.height else self.height -1 
                 if y >= self.height:
                     continue
@@ -408,17 +412,23 @@ class Datasets(torch.utils.data.Dataset):
                 blurred_image = cv2.GaussianBlur(point_on_zero, (5, 5), 0)
                 y_coords, x_coords = np.where(blurred_image > 1)
                 
+                # cv2.line(self.draw_copy, control_points, (x, y), (0, 255, 0), 1, 1)
+                # cv2.imshow("draw_line", cv2.resize(self.draw_copy, (640, 640)))
+                # cv2.waitKey()
+                
                 for blur_x, blur_y in zip(x_coords, y_coords):
                     # print(f"x: {x}, y: {y}")
+                    # point_a = (blur_x, blur_y)
                     point_a = (blur_x/self.width, blur_y/self.height)
-                
+                    
+                    # print(f"control points: {control_points}, point a: {point_a}")
+
                     vx, vy, dis = get_vxvyd(point_a=point_a, control_point=control_points)
                     
-                    # print(f"vx, vy, dis: {vx, vy, dis}")
+                    # print(f"vx, vy, dis: {vx, vy, dis}\n")
                     
-                    ascription_field[0][blur_y][blur_x] = (vx + 1)/2
-                    ascription_field[1][blur_y][blur_x] = (vy + 1)/2
-                    ascription_field[2][blur_y][blur_x] = (dis + 1)/2
+                    ascription_field[point_id][blur_y][blur_x] = vx
+                    ascription_field[point_id + keypoints_number][blur_y][blur_x] = vy
                     ascription_mask[blur_y][blur_x] = 1
         
         ascription_field = np.array(ascription_field, dtype=np.float64)

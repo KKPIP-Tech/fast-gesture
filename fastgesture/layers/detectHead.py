@@ -39,27 +39,49 @@ class KeyPointsDH(nn.Module):
 
 
 class AscriptionDH(nn.Module):
-    def __init__(self, in_channles=8) -> None:
+    def __init__(self, keypoints_number=11) -> None:
         super(AscriptionDH, self).__init__()
         
         self.heads = nn.ModuleList()
         
-        for _ in range(3):
+        for _ in range(keypoints_number*2):
             head = nn.Sequential(
-                # nn.Conv2d(1, 8, kernel_size=(1, 1), padding=0),
+                
+                nn.Conv2d(8, 8, kernel_size=3, padding=1, groups=8),
+                nn.BatchNorm2d(8),  # 批次归一化
+                nn.LeakyReLU(inplace=True),  # 激活函数/，用于输出
+                # nn.Tanh(),
+                nn.Conv2d(8, 8, kernel_size=1),
+                nn.BatchNorm2d(8),  # 批次归一化
+                nn.LeakyReLU(inplace=True),  # 激活函数，用于输出
+                # nn.Tanh(),
+                
+                nn.Conv2d(8, 4, kernel_size=(1, 1), padding=0),
+                nn.LeakyReLU(inplace=True),
                 # nn.ReLU(inplace=True),
-                # # nn.Tanh(),
-                # nn.Conv2d(8, 16, kernel_size=(1, 1), padding=0),
+                # nn.Tanh(),
+                
+                # nn.Conv2d(4, 4, kernel_size=3, padding=1, groups=4),
+                # # nn.BatchNorm2d(4),  # 批次归一化
+                # # nn.ReLU(inplace=True),  # 激活函数，用于输出
+                # nn.Tanh(),
+                # nn.Conv2d(4, 4, kernel_size=1),
+                # # nn.BatchNorm2d(4),  # 批次归一化
+                # # nn.ReLU(inplace=True),  # 激活函数，用于输出
+                # nn.Tanh(),
+                
+                # nn.Tanh(),
+                nn.Conv2d(4, 1, kernel_size=(1, 1), padding=0),
                 # nn.ReLU(inplace=True),
-                # # nn.Tanh(),
-                # nn.Conv2d(16, 8, kernel_size=(1, 1), padding=0),
+                # nn.Tanh(),
+                # nn.Conv2d(2, 1, kernel_size=(1, 1), padding=0),
                 # nn.ReLU(inplace=True),
-                # # nn.Tanh(),
-                # nn.Conv2d(8, 1, kernel_size=(1, 1), padding=0),
-                nn.Conv2d(1, 1, kernel_size=(1, 1), padding=0),
+                # # # nn.Tanh(),
+                # # nn.Conv2d(8, 1, kernel_size=(1, 1), padding=0),
+                # nn.Conv2d(1, 1, kernel_size=(1, 1), padding=0),
                 # nn.ReLU(),
                 # nn.Tanh(),
-                nn.Sigmoid()
+                # nn.Sigmoid()
             )
             self.heads.append(head)
         

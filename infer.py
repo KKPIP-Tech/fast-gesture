@@ -91,7 +91,7 @@ class FGInfer:
             self.keypoints.append(keypoint)
         
         ascription_maps:list = []
-        for asf_index in range(3):  # 3 for vx, vy, dis
+        for asf_index in range(self.keypoints_num*2):  # 3 for vx, vy, dis
             ascription_field_map = f_ascription.permute(1, 0, 2, 3)[0][asf_index].cpu().detach().numpy().astype(np.float32)
             ascription_maps.append(ascription_field_map)
         
@@ -157,13 +157,13 @@ class FGInfer:
                 center_x = point["center_x"]
                 center_y = point["center_y"]
                 conf = point["conf"]
-                vx = ascription_maps[0][center_y, center_x]
-                vy = ascription_maps[1][center_y, center_x]
+                vx = ascription_maps[keypoint_id][center_y, center_x]
+                vy = ascription_maps[keypoint_id + self.keypoints_num][center_y, center_x]
                 
-                vx = vx*self.img_size[0]
-                vy = vy*self.img_size[1]
+                # vx = vx*self.img_size[0]
+                # vy = vy*self.img_size[1]
                 
-                # print(f"xydis {vx, vy, dis}")
+                print(f"xydis {vx, vy}")
                 end_x, end_y = inverse_vxvyd((center_x, center_y), vx, vy)
                 new_points_info:KeypointsCenter = {
                     "keypoint_id": keypoint_id,
@@ -183,9 +183,9 @@ class FGInfer:
     
 if __name__ == "__main__":
     import time
-    weight:str = "/home/kd/Documents/Codes/fast-gesture/run/train/20240324/weights/last.pt"
+    weight:str = "/home/kd/Documents/Codes/fast-gesture/run/train/20240403/weights/last.pt"
     
-    fg_model = FGInfer(device='cuda', img_size=(160, 160), weights=weight, conf=0.2, keypoints_num=11)
+    fg_model = FGInfer(device='cuda', img_size=(192, 192), weights=weight, conf=0.2, keypoints_num=11)
     
     capture = cv2.VideoCapture(0)
     
@@ -195,7 +195,7 @@ if __name__ == "__main__":
         while True:
             st = time.time()
             frame = cv2.imread(img)       
-            ret, frame = capture.read()
+            # ret, frame = capture.read()
             cv2.imshow(f"Frame", frame)
             letterbox_image, keypoints = fg_model.infer(image=frame)
             letterbox_image = cv2.cvtColor(letterbox_image, cv2.COLOR_GRAY2BGR)

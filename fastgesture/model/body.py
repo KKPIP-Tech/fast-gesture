@@ -72,22 +72,22 @@ class FastGesture(nn.Module):
         UNET_output_channel = 64      
         self.unet_to_asf = nn.Sequential(
             nn.Conv2d(UNET_output_channel, UNET_output_channel//2, kernel_size=(1, 1), padding=0),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(inplace=True),
             nn.Conv2d(UNET_output_channel//2, UNET_output_channel//4, kernel_size=(1, 1), padding=0),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(inplace=True),
             nn.Conv2d(UNET_output_channel//4, UNET_output_channel//8, kernel_size=(1, 1), padding=0),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(inplace=True),
             nn.Conv2d(UNET_output_channel//8, 1, kernel_size=(1, 1), padding=0),
-            nn.Sigmoid()
+            # nn.Sigmoid()
         )
         self.asf_down_conv = ASFDownSample(inchannels=1, out_channels=16)
         self.asf_deep_conv = ASFConv3B3(inchannels=16, out_channels=16, kernel=3, stride=1, padding=1)
         self.asf_light_conv = ASFConv1B1(inchannels=16, out_channels=16, kernel=1)
-        self.asf_up_conv = ASFUpSample(inchannels=16, out_channels=1, kernel=3, stride=1, padding=0)
+        self.asf_up_conv = ASFUpSample(inchannels=16, out_channels=8, kernel=3, stride=1, padding=0)
         
         # Detect Head -------------------------------------
         self.UNETKeypointsDH = KeyPointsDH(head_nums=keypoints_num, in_channles=64)
-        self.Ascription = AscriptionDH(in_channles=1)
+        self.Ascription = AscriptionDH(keypoints_number=keypoints_num)
         
     def forward(self, x):
         
@@ -139,20 +139,20 @@ class FastGesture(nn.Module):
         heatmaps = self.UNETKeypointsDH(UNET_output)  # [keypoints_num, Batch, 1, 320, 320]
         
         # Get Ascription Field
-        asf_x_down = self.asf_down_conv(x)
+        # asf_x_down = self.asf_down_conv(x)
         asf_unet_down = self.asf_down_conv(asf_unet)
         
-        asf_deep_out1 = self.asf_deep_conv(asf_unet_down+asf_x_down)
+        asf_deep_out1 = self.asf_deep_conv(asf_unet_down)
         asf_deep_out2 = self.asf_deep_conv(asf_deep_out1)
-        asf_deep_out3 = self.asf_deep_conv(asf_deep_out2+asf_x_down)
+        asf_deep_out3 = self.asf_deep_conv(asf_deep_out2)
         asf_deep_out4 = self.asf_deep_conv(asf_deep_out3)
-        asf_deep_out5 = self.asf_deep_conv(asf_deep_out4+asf_x_down)
+        asf_deep_out5 = self.asf_deep_conv(asf_deep_out4)
         asf_deep_out6 = self.asf_deep_conv(asf_deep_out5)
         
         asf_light_out1 = self.asf_light_conv(asf_deep_out6)
-        asf_light_out2 = self.asf_light_conv(asf_light_out1+asf_x_down)
+        asf_light_out2 = self.asf_light_conv(asf_light_out1)
         
-        asf_stage1 = asf_light_out2 + asf_unet_down# + asf_x_down
+        # asf_stage1 = asf_light_out2 + asf_unet_down
         
         # asf_deep_out1 = self.asf_deep_conv(asf_stage1)
         # asf_deep_out2 = self.asf_deep_conv(asf_deep_out1+asf_x_down)
@@ -166,7 +166,7 @@ class FastGesture(nn.Module):
         
         # asf_stage1 = asf_light_out2 + asf_stage1 + asf_unet_down + asf_x_down
         
-        asf_up = self.asf_up_conv(asf_stage1)
+        asf_up = self.asf_up_conv(asf_light_out2)
         
         # asf_stage2 = asf_light_out2 + asf_stage1
         

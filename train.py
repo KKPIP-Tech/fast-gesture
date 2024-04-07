@@ -86,7 +86,7 @@ def train(opt, save_path, resume=None):
     # set datasets
     datasets = Datasets(config_file=config_file, img_size=opt.img_size)
     
-    cls_num = datasets.get_cls_num()
+    # cls_num = datasets.get_cls_num()
     keypoints_num = datasets.get_keypoints_num()
     
     dataloader_workers = opt.workers if opt.workers < get_core_num()[1] else get_core_num()[1]
@@ -106,8 +106,10 @@ def train(opt, save_path, resume=None):
     criterion_heatmap = nn.MSELoss().to(device=device)
     # criterion_bbox = nn.L1Loss().to(device=device)
     # criterion_confidence = nn.BCEWithLogitsLoss().to(device=device)
-    criterion_ascription = nn.SmoothL1Loss(reduction='sum').to(device=device)
-    
+    # criterion_ascription = nn.SmoothL1Loss(reduction='sum').to(device=device)
+    criterion_x_ascription = nn.L1Loss(reduction='none').to(device=device)
+    criterion_y_ascription = nn.L1Loss(reduction='none').to(device=device)
+  
     # set optimizer
     user_set_optim = opt.optimizer
     optimizer = select_optim(net=model, opt=opt, user_set_optim=user_set_optim)
@@ -174,92 +176,41 @@ def train(opt, save_path, resume=None):
                 # image_to_show = (image_to_show).astype(np.uint8)
                 # print("MAX: ", np.max(image_to_show))
                 cv2.imshow(f"Forward {kp_i}", image_to_show)
-                # cv2.waitKey(1) # 等待按键事件
                 
                 keypoint_regress_loss += criterion_heatmap(f_keypoints_classification[kp_i], tensor_kp_cls_labels[kp_i])
             
-            # bbox_loss = 0.0
-            # for bbox_i in range(5):
-            #     # image_to_show = tensor_kp_cls_labels.permute(1, 0, 2, 3)[0][kp_i].cpu().detach().numpy().astype(np.float32)
-            #     # # print(f"img_to_show {image_to_show.shape}")
-            #     # # image_to_show = image_to_show[0, :, :]
-            #     # # image_to_show = (image_to_show).astype(np.uint8)
-            #     # # print("MAX: ", np.max(image_to_show))
-            #     # cv2.imshow(f"Label {kp_i}", image_to_show)
-            #     # cv2.waitKey(1) # 等待按键事件
-            #     # image_to_show = f_bbox_label.permute(1, 0, 2, 3)[0][bbox_i].cpu().detach().numpy().astype(np.float32)
-            #     # # print(f"img_to_show {image_to_show.shape}")
-            #     # # image_to_show = image_to_show[0, :, :]
-            #     # # image_to_show = (image_to_show).astype(np.uint8)
-            #     # # print("MAX: ", np.max(image_to_show))
-            #     # cv2.imshow(f"BBox {bbox_i}", image_to_show)
-            #     # cv2.waitKey(1) # 等待按键事件
-                
-            #     bbox_loss += criterion_bbox(f_bbox_label[bbox_i], tensor_bbox_labels[bbox_i])
             
-            # loss += bbox_loss / 5
-            
-            # classification_loss = 0.0
-            # for cls_i in range(tensor_bbox_labels.shape[0]-5, tensor_bbox_labels.shape[0]):
-            #     # image_to_show = tensor_bbox_labels.permute(1, 0, 2, 3)[0][cls_i].cpu().detach().numpy().astype(np.float32)
-            #     # # print(f"img_to_show {image_to_show.shape}")
-            #     # # image_to_show = image_to_show[0, :, :]
-            #     # # image_to_show = (image_to_show).astype(np.uint8)
-            #     # # print("MAX: ", np.max(image_to_show))
-            #     # cv2.imshow(f"Class Label {cls_i}", image_to_show)
-            #     # cv2.waitKey(1) # 等待按键事件
-            #     # image_to_show = f_bbox_label.permute(1, 0, 2, 3)[0][cls_i].cpu().detach().numpy().astype(np.float32)
-            #     # # print(f"img_to_show {image_to_show.shape}")
-            #     # # image_to_show = image_to_show[0, :, :]
-            #     # # image_to_show = (image_to_show).astype(np.uint8)
-            #     # # print("MAX: ", np.max(image_to_show))
-            #     # cv2.imshow(f"Class {cls_i}", image_to_show)
-            #     # cv2.waitKey(1) # 等待按键事件
-            #     classification_loss += criterion_confidence(f_bbox_label[cls_i], tensor_bbox_labels[cls_i])
-            
-            # loss += classification_loss / (tensor_bbox_labels.shape[0]-5)
-            
-            asf_loss = 0.0
-            for asf_i in range(3):
-                # asf_loss += criterion_ascription(
-                #     f_ascription[asf_i]*tensor_ascription_mask, tensor_ascription_field[asf_i]*tensor_ascription_mask
-                # )
-                asf_loss += criterion_ascription(
-                    f_ascription[asf_i], tensor_ascription_field[asf_i]
-                )
-            
-            asf_loss = asf_loss/((tensor_ascription_mask.sum() + 1e-6)*3)
-            
-            image_to_show = tensor_ascription_field.permute(1, 0, 2, 3)[0].cpu().detach().numpy()  # .astype(np.float64)
-            # print(f"ASF Max: {np.max(image_to_show)}")
-            # print(f"img_to_show {image_to_show.shape}")
-            # image_to_show = image_to_show[0, :, :]
-            # image_to_show = (image_to_show).astype(np.uint8)
-            # print("MAX: ", np.max(image_to_show))
-            # image_to_show = (image_to_show + 1) / 2
-            
-            # print(np.transpose(image_to_show, (1, 2, 0)))
-            # cv2.imshow(f"Label", cv2.resize(np.transpose(image_to_show, (1, 2, 0))*255, (640, 640)))
-            cv2.imshow(f"Label", np.transpose(image_to_show, (1, 2, 0)))
+            asf_x_loss = 0.0
+            for asf_i in range(0, keypoints_num, 1):
+                # print(f"out shape: {f_ascription[asf_i].shape}")
+                # print(f"target shape: {tensor_ascription_field[asf_i].shape}")
+                asf_x_loss += torch.sum(criterion_x_ascription(
+                    f_ascription[asf_i]*tensor_ascription_mask, tensor_ascription_field[asf_i]
+                ))
 
-            # cv2.waitKey(1) # 等待按键事件
-            image_to_show = f_ascription.permute(1, 0, 2, 3)[0].cpu().detach().numpy()  # .astype(np.float64)
-            # print(f"img_to_show {image_to_show.shape}")
-            # image_to_show = image_to_show[0, :, :]
-            # image_to_show = (image_to_show).astype(np.uint8)
-            # print("MAX: ", np.max(image_to_show))
-            # image_to_show = (image_to_show + 1) / 2
-            cv2.imshow(f"f_ascription", np.transpose(image_to_show, (1, 2, 0)))
-            cv2.waitKey(1) # 等待按键事件
+            asf_y_loss = 0.0
+            for asf_i in range(keypoints_num, keypoints_num*2, 1):
+                asf_y_loss += torch.sum(criterion_y_ascription(
+                    f_ascription[asf_i]*tensor_ascription_mask, tensor_ascription_field[asf_i]
+                ))
             
-            # if epoch > 2:
-            #     draw_arrows_on_image(np.transpose(image_to_show, (1, 2, 0)))
-            
-            # loss += asf_loss # / 3
+            # print(f"asf shape: {tensor_ascription_field.shape}")
+            image_to_show = tensor_ascription_field.permute(1, 0, 2, 3)[0][0].cpu().detach().numpy()  # .astype(np.float64)
+
+            cv2.imshow(f"asf_label {0}", image_to_show)#np.transpose(image_to_show, (1, 2, 0)))
+
+            image_to_show = f_ascription.permute(1, 0, 2, 3)[0][0].cpu().detach().numpy()  # .astype(np.float64)
+
+            cv2.imshow(f"forward asf {[0]}", image_to_show)#np.transpose(image_to_show, (1, 2, 0)))
+            cv2.waitKey(1) 
             
             # loss = (keypoint_regress_loss / tensor_kp_cls_labels.shape[0])*0.6 + (asf_loss/3)*0.4
             
-            loss = (keypoint_regress_loss / tensor_kp_cls_labels.shape[0])*0.1 + (asf_loss/3)*0.9
+            # loss = (keypoint_regress_loss / tensor_kp_cls_labels.shape[0]) + (asf_loss/keypoints_num*2)
+            
+            loss = keypoint_regress_loss + asf_x_loss+ asf_y_loss
+            
+            # print(f'Loss: {loss}')
             
             # loss_heatmap = criterion_heatmap(f_keypoints_classification, tensor_kp_cls_labels)
             # # loss_bbox = criterion_bbox(f_bbox_label[:, :5, :, :], tensor_bbox_labels[:, :5, :, :])
