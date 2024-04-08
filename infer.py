@@ -160,8 +160,8 @@ class FGInfer:
                 vx = ascription_maps[keypoint_id][center_y, center_x]
                 vy = ascription_maps[keypoint_id + self.keypoints_num][center_y, center_x]
                 
-                # vx = vx*self.img_size[0]
-                # vy = vy*self.img_size[1]
+                vx = vx*(self.img_size[0]*6)
+                vy = vy*(self.img_size[1]*6)
                 
                 print(f"xydis {vx, vy}")
                 end_x, end_y = inverse_vxvyd((center_x, center_y), vx, vy)
@@ -183,9 +183,9 @@ class FGInfer:
     
 if __name__ == "__main__":
     import time
-    weight:str = "/home/kd/Documents/Codes/fast-gesture/run/train/20240403/weights/last.pt"
+    weight:str = "/home/kd/Documents/Codes/fast-gesture/run/train/20240408/weights/last.pt"
     
-    fg_model = FGInfer(device='cuda', img_size=(192, 192), weights=weight, conf=0.2, keypoints_num=11)
+    fg_model = FGInfer(device='cuda', img_size=(160, 160), weights=weight, conf=0.2, keypoints_num=11)
     
     capture = cv2.VideoCapture(0)
     
@@ -195,7 +195,7 @@ if __name__ == "__main__":
         while True:
             st = time.time()
             frame = cv2.imread(img)       
-            # ret, frame = capture.read()
+            ret, frame = capture.read()
             cv2.imshow(f"Frame", frame)
             letterbox_image, keypoints = fg_model.infer(image=frame)
             letterbox_image = cv2.cvtColor(letterbox_image, cv2.COLOR_GRAY2BGR)

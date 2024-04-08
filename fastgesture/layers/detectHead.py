@@ -49,15 +49,15 @@ class AscriptionDH(nn.Module):
                 
                 nn.Conv2d(8, 8, kernel_size=3, padding=1, groups=8),
                 nn.BatchNorm2d(8),  # 批次归一化
-                nn.LeakyReLU(inplace=True),  # 激活函数/，用于输出
+                nn.LeakyReLU(negative_slope=0.5),  # 激活函数/，用于输出
                 # nn.Tanh(),
                 nn.Conv2d(8, 8, kernel_size=1),
                 nn.BatchNorm2d(8),  # 批次归一化
-                nn.LeakyReLU(inplace=True),  # 激活函数，用于输出
+                nn.LeakyReLU(negative_slope=0.5),  # 激活函数，用于输出
                 # nn.Tanh(),
                 
                 nn.Conv2d(8, 4, kernel_size=(1, 1), padding=0),
-                nn.LeakyReLU(inplace=True),
+                nn.LeakyReLU(negative_slope=0.5),
                 # nn.ReLU(inplace=True),
                 # nn.Tanh(),
                 
@@ -72,6 +72,7 @@ class AscriptionDH(nn.Module):
                 
                 # nn.Tanh(),
                 nn.Conv2d(4, 1, kernel_size=(1, 1), padding=0),
+                nn.LeakyReLU(negative_slope=0.5),
                 # nn.ReLU(inplace=True),
                 # nn.Tanh(),
                 # nn.Conv2d(2, 1, kernel_size=(1, 1), padding=0),

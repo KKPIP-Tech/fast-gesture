@@ -24,15 +24,15 @@ class ASFDownSample(nn.Module):
         self.conv = nn.Sequential(
             nn.Conv2d(in_channels=inchannels, out_channels=out_channels//4, kernel_size=kernel, stride=stride, padding=padding, groups=groups),
             nn.BatchNorm2d(out_channels//4),
-            nn.LeakyReLU(inplace=True),
+            nn.LeakyReLU(inplace=True, negative_slope=0.5),
             nn.Dropout(drop),
             nn.Conv2d(in_channels=out_channels//4, out_channels=out_channels//8, kernel_size=kernel, stride=stride, padding=1, groups=groups),
             nn.BatchNorm2d(out_channels//8),
-            nn.LeakyReLU(inplace=True),
+            nn.LeakyReLU(inplace=True, negative_slope=0.5),
             nn.Dropout(drop),
             nn.Conv2d(in_channels=out_channels//8, out_channels=out_channels, kernel_size=kernel, stride=stride, padding=1, groups=groups),
             nn.BatchNorm2d(out_channels),
-            nn.LeakyReLU(inplace=True),
+            nn.LeakyReLU(inplace=True, negative_slope=0.5),
             nn.Dropout(drop),
         )
     
@@ -46,15 +46,15 @@ class ASFUpSample(nn.Module):
         self.conv = nn.Sequential(
             nn.Conv2d(in_channels=inchannels, out_channels=out_channels, kernel_size=kernel, stride=stride, padding=padding, groups=groups),
             nn.BatchNorm2d(out_channels),
-            nn.LeakyReLU(inplace=True),
+            nn.LeakyReLU(negative_slope=0.5),
             nn.Dropout(drop),
             nn.Conv2d(in_channels=out_channels, out_channels=inchannels, kernel_size=kernel, stride=stride, padding=2, groups=groups),
             nn.BatchNorm2d(inchannels),
-            nn.LeakyReLU(inplace=True),
+            nn.LeakyReLU(negative_slope=0.5),
             nn.Dropout(drop),
             nn.Conv2d(in_channels=inchannels, out_channels=out_channels, kernel_size=kernel, stride=stride, padding=2, groups=groups),
             nn.BatchNorm2d(out_channels),
-            nn.LeakyReLU(inplace=True),
+            nn.LeakyReLU(negative_slope=0.5),
             nn.Dropout(drop),
         )
     
@@ -68,7 +68,7 @@ class ASFConv3B3(nn.Module):
         self.conv1 = nn.Sequential(
             nn.Conv2d(in_channels=inchannels, out_channels=out_channels, kernel_size=kernel, stride=stride, padding=padding, groups=groups),
             nn.BatchNorm2d(out_channels),
-            nn.LeakyReLU(inplace=True),
+            nn.LeakyReLU(negative_slope=0.5),
             nn.Dropout(drop),
             # nn.Sigmoid()
             # nn.Tanh(),
@@ -76,7 +76,7 @@ class ASFConv3B3(nn.Module):
         self.conv2 = nn.Sequential(
             nn.Conv2d(in_channels=inchannels, out_channels=out_channels, kernel_size=kernel, stride=stride, padding=padding, groups=groups),
             nn.BatchNorm2d(out_channels),
-            nn.LeakyReLU(inplace=True),
+            nn.LeakyReLU(negative_slope=0.5),
             nn.Dropout(drop),
             # nn.Sigmoid()
             # nn.Tanh(),
@@ -84,7 +84,7 @@ class ASFConv3B3(nn.Module):
         self.conv3 = nn.Sequential(
             nn.Conv2d(in_channels=inchannels, out_channels=out_channels, kernel_size=kernel, stride=stride, padding=padding, groups=groups),
             nn.BatchNorm2d(out_channels),
-            nn.LeakyReLU(inplace=True),
+            nn.LeakyReLU(negative_slope=0.5),
             nn.Dropout(drop),
             # nn.Sigmoid()
             # nn.Tanh(),
@@ -116,7 +116,7 @@ class ASFConv1B1(nn.Module):
         self.conv1 = nn.Sequential(
             nn.Conv2d(in_channels=inchannels, out_channels=out_channels, kernel_size=kernel, stride=stride, padding=padding, groups=groups),
             nn.BatchNorm2d(out_channels),
-            nn.LeakyReLU(inplace=True),
+            nn.LeakyReLU(negative_slope=0.5),
             nn.Dropout(drop),
             # nn.Sigmoid()
             # nn.Tanh(),

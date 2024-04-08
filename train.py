@@ -107,12 +107,14 @@ def train(opt, save_path, resume=None):
     # criterion_bbox = nn.L1Loss().to(device=device)
     # criterion_confidence = nn.BCEWithLogitsLoss().to(device=device)
     # criterion_ascription = nn.SmoothL1Loss(reduction='sum').to(device=device)
-    criterion_x_ascription = nn.L1Loss(reduction='none').to(device=device)
-    criterion_y_ascription = nn.L1Loss(reduction='none').to(device=device)
+    criterion_x_ascription = nn.MSELoss(reduction='mean').to(device=device)
+    criterion_y_ascription = nn.MSELoss(reduction='mean').to(device=device)
   
     # set optimizer
     user_set_optim = opt.optimizer
     optimizer = select_optim(net=model, opt=opt, user_set_optim=user_set_optim)
+        
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=2, gamma=0.8)
     
     # 初始化 TensorBoard
     writer = SummaryWriter(log_dir=save_path)
@@ -126,6 +128,8 @@ def train(opt, save_path, resume=None):
     for epoch in range(start_epoch, max_epoch):
         model.train()
         pbar = tqdm(dataloader, desc=f"[Epoch {epoch}] -> ")
+        
+        current_lr = scheduler.get_last_lr()[0]
         
         total_loss = 0.0
         min_loss = 10000
@@ -145,7 +149,7 @@ def train(opt, save_path, resume=None):
             # tensor_bbox_labels = tensor_bbox_labels.permute(1, 0, 2, 3).to(device)  # [5 + names_num, Batch, 160, 160]
             tensor_ascription_field = tensor_ascription_field.permute(1, 0, 2, 3).to(device)  # [3, Batch, 320, 320]
             
-            tensor_ascription_mask = tensor_ascription_mask.permute(1, 0, 2, 3).to(device)
+            tensor_ascription_mask = tensor_ascription_mask.permute(1, 0, 2, 3).to(device)[0]
             
             optimizer.zero_grad()
             
@@ -183,16 +187,22 @@ def train(opt, save_path, resume=None):
             asf_x_loss = 0.0
             for asf_i in range(0, keypoints_num, 1):
                 # print(f"out shape: {f_ascription[asf_i].shape}")
-                # print(f"target shape: {tensor_ascription_field[asf_i].shape}")
-                asf_x_loss += torch.sum(criterion_x_ascription(
-                    f_ascription[asf_i]*tensor_ascription_mask, tensor_ascription_field[asf_i]
-                ))
+                # print(f"tensor_ascription_mask shape: {tensor_ascription_mask.shape}")
+                # asf_x_loss += torch.sum(criterion_x_ascription(
+                #     f_ascription[asf_i], tensor_ascription_field[asf_i]
+                # ))
+                asf_x_loss += criterion_x_ascription(
+                    f_ascription[asf_i], tensor_ascription_field[asf_i]
+                )
 
             asf_y_loss = 0.0
             for asf_i in range(keypoints_num, keypoints_num*2, 1):
-                asf_y_loss += torch.sum(criterion_y_ascription(
-                    f_ascription[asf_i]*tensor_ascription_mask, tensor_ascription_field[asf_i]
-                ))
+                # asf_y_loss += torch.sum(criterion_y_ascription(
+                #     f_ascription[asf_i], tensor_ascription_field[asf_i]
+                # ))
+                asf_y_loss += criterion_y_ascription(
+                    f_ascription[asf_i], tensor_ascription_field[asf_i]
+                )
             
             # print(f"asf shape: {tensor_ascription_field.shape}")
             image_to_show = tensor_ascription_field.permute(1, 0, 2, 3)[0][0].cpu().detach().numpy()  # .astype(np.float64)
@@ -208,7 +218,7 @@ def train(opt, save_path, resume=None):
             
             # loss = (keypoint_regress_loss / tensor_kp_cls_labels.shape[0]) + (asf_loss/keypoints_num*2)
             
-            loss = keypoint_regress_loss + asf_x_loss+ asf_y_loss
+            loss = keypoint_regress_loss + asf_x_loss + asf_y_loss
             
             # print(f'Loss: {loss}')
             
@@ -243,17 +253,18 @@ def train(opt, save_path, resume=None):
                 # print(f"gpu_memory_bytes {gpu_memory_bytes}")
                 # 将字节转换为GB
                 gpu_memory_GB = round(gpu_memory_bytes / 1024 / 1024 / 1024, 2)
-                pbar.set_description(f"Epoch {epoch}, GPU {gpu_memory_GB} G, avg_l {avg_loss:.10f}")
+                pbar.set_description(f"Epoch {epoch}, GPU {gpu_memory_GB} G, cur_lr {current_lr:.10f}, avg_l {avg_loss:.10f}")
             else:
-                pbar.set_description(f"Epoch {epoch}, avg_l {avg_loss:.10f}")
+                pbar.set_description(f"Epoch {epoch}, cur_lr {current_lr:.10f}, avg_l {avg_loss:.10f}")
             
             # 将 Loss 写入文本文件
             with open(f"{save_path}/log.txt", "a") as f:
-                f.write(f"Epoch: {epoch}, Batch: {index}, AVG Loss: {avg_loss}, Total Loss: {total_loss}\n")
+                f.write(f"Epoch: {epoch}, cur_lr: {current_lr:.10f}, Batch: {index}, AVG Loss: {avg_loss}, Total Loss: {total_loss}\n")
 
         # 使用 TensorBoard 记录 Loss
         writer.add_scalar("Avg Loss", avg_loss, epoch)
         writer.add_scalar("Total Loss", total_loss, epoch)
+        writer.add_scalar("Lr", current_lr, epoch)
             
         ckpt_save(
             model=model, optim=optimizer, epoch=epoch, save_pth=save_path, file_name=f"epoch_{str(epoch)}",
@@ -261,6 +272,8 @@ def train(opt, save_path, resume=None):
         ckpt_save(
             model=model, optim=optimizer, epoch=epoch, save_pth=save_path, file_name=f"epoch_{str(epoch)}", last=True
         )
+        
+        scheduler.step()
     writer.close()
               
 def run(opt):

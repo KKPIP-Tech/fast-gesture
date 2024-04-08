@@ -72,11 +72,11 @@ class FastGesture(nn.Module):
         UNET_output_channel = 64      
         self.unet_to_asf = nn.Sequential(
             nn.Conv2d(UNET_output_channel, UNET_output_channel//2, kernel_size=(1, 1), padding=0),
-            nn.LeakyReLU(inplace=True),
+            nn.LeakyReLU(inplace=True, negative_slope=0.5),
             nn.Conv2d(UNET_output_channel//2, UNET_output_channel//4, kernel_size=(1, 1), padding=0),
-            nn.LeakyReLU(inplace=True),
+            nn.LeakyReLU(inplace=True, negative_slope=0.5),
             nn.Conv2d(UNET_output_channel//4, UNET_output_channel//8, kernel_size=(1, 1), padding=0),
-            nn.LeakyReLU(inplace=True),
+            nn.LeakyReLU(inplace=True, negative_slope=0.5),
             nn.Conv2d(UNET_output_channel//8, 1, kernel_size=(1, 1), padding=0),
             # nn.Sigmoid()
         )

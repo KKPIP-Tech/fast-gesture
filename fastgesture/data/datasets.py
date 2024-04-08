@@ -386,8 +386,8 @@ class Datasets(torch.utils.data.Dataset):
                 continue
             cp_y_n = cp_y / self.height
             
-            # control_points = (cp_x, cp_y)
-            control_points = (cp_x_n, cp_y_n)
+            control_points = (cp_x, cp_y)
+            # control_points = (cp_x_n, cp_y_n)
             
             points = one_hand['points']
             for point in points:
@@ -406,7 +406,7 @@ class Datasets(torch.utils.data.Dataset):
                     continue
                 # y_n = y / self.height
                 
-                # point_a = (x, y)
+                point_a = (x, y)
                 # point_a = (x_n, y_n)
                 point_on_zero[y][x] = 255                
                 blurred_image = cv2.GaussianBlur(point_on_zero, (5, 5), 0)
@@ -416,19 +416,22 @@ class Datasets(torch.utils.data.Dataset):
                 # cv2.imshow("draw_line", cv2.resize(self.draw_copy, (640, 640)))
                 # cv2.waitKey()
                 
+                vx, vy, dis = get_vxvyd(point_a=point_a, control_point=control_points)
+                
+                
                 for blur_x, blur_y in zip(x_coords, y_coords):
                     # print(f"x: {x}, y: {y}")
                     # point_a = (blur_x, blur_y)
-                    point_a = (blur_x/self.width, blur_y/self.height)
+                    # point_a = (blur_x/self.width, blur_y/self.height)
                     
                     # print(f"control points: {control_points}, point a: {point_a}")
 
-                    vx, vy, dis = get_vxvyd(point_a=point_a, control_point=control_points)
+                   
                     
                     # print(f"vx, vy, dis: {vx, vy, dis}\n")
                     
-                    ascription_field[point_id][blur_y][blur_x] = vx
-                    ascription_field[point_id + keypoints_number][blur_y][blur_x] = vy
+                    ascription_field[point_id][blur_y][blur_x] = vx/(self.width/6)
+                    ascription_field[point_id + keypoints_number][blur_y][blur_x] = vy/(self.height/6)
                     ascription_mask[blur_y][blur_x] = 1
         
         ascription_field = np.array(ascription_field, dtype=np.float64)
