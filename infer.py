@@ -59,6 +59,7 @@ class FGInfer:
         
         checkpoints = torch.load(self.weight)
         pre_trained = checkpoints['model']
+        self.pncs = checkpoints["pncs_result"]["ncs"]
         self.model.load_state_dict(pre_trained, strict=True)
         self.model.eval()
     
@@ -157,11 +158,20 @@ class FGInfer:
                 center_x = point["center_x"]
                 center_y = point["center_y"]
                 conf = point["conf"]
-                vx = ascription_maps[keypoint_id][center_y, center_x]
-                vy = ascription_maps[keypoint_id + self.keypoints_num][center_y, center_x]
+                # vx = ascription_maps[keypoint_id][center_y, center_x]
+                # vy = ascription_maps[keypoint_id + self.keypoints_num][center_y, center_x]
                 
-                vx = vx*(self.img_size[0]*6)
-                vy = vy*(self.img_size[1]*6)
+                vx = self.find_nearest_gaussian(ascription_maps[keypoint_id], (center_x, center_y))
+                vy = self.find_nearest_gaussian(ascription_maps[keypoint_id+self.keypoints_num], (center_x, center_y))
+                
+                x_coe = self.pncs[keypoint_id]["x_coefficient"]
+                y_coe = self.pncs[keypoint_id]["y_coefficient"]
+                
+                # vx = vx*(self.img_size[0]*6)
+                # vy = vy*(self.img_size[1]*6)
+                
+                vx = vx*x_coe
+                vy = vy*y_coe
                 
                 print(f"xydis {vx, vy}")
                 end_x, end_y = inverse_vxvyd((center_x, center_y), vx, vy)
@@ -181,6 +191,14 @@ class FGInfer:
             }
             self.keypoints[type_index] = new_type_info
     
+    @staticmethod
+    def find_nearest_gaussian(heatmap, point):
+        y_indices, x_indices = np.indices(heatmap.shape)
+        distances = np.sqrt((x_indices - point[0])**2 + (y_indices - point[1])**2)
+        min_distance_index = np.argmin(distances)
+        nearest_value = heatmap.flatten()[min_distance_index]
+        return nearest_value
+    
 if __name__ == "__main__":
     import time
     weight:str = "/home/kd/Documents/Codes/fast-gesture/run/train/20240408/weights/last.pt"
@@ -195,14 +213,14 @@ if __name__ == "__main__":
         while True:
             st = time.time()
             frame = cv2.imread(img)       
-            ret, frame = capture.read()
+            # ret, frame = capture.read()
             cv2.imshow(f"Frame", frame)
             letterbox_image, keypoints = fg_model.infer(image=frame)
             letterbox_image = cv2.cvtColor(letterbox_image, cv2.COLOR_GRAY2BGR)
             for keypoint in keypoints:
                 keypoints_type = keypoint["type"]
                 points = keypoint["points"]
-                print(f"type: {keypoints_type}|points: {points}")
+                # print(f"type: {keypoints_type}|points: {points}")
                 for point in points:
                     center_x = point["center_x"]
                     center_y = point["center_y"]

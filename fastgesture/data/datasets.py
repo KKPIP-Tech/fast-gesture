@@ -27,6 +27,7 @@ from fastgesture.data.augment import (
     translate
 )
 from fastgesture.data.generate import get_vxvyd
+from fastgesture.data.point_average_value import PointsNC, NormalizationCoefficient
 
 
 class Points(TypedDict):
@@ -45,7 +46,7 @@ class PrepocessLabel(TypedDict):
 
 
 class Datasets(torch.utils.data.Dataset):
-    def __init__(self, config_file, img_size) -> None:
+    def __init__(self, config_file, img_size, pncs_result:PointsNC) -> None:
         
         print(f"Datasets Config File: {config_file}")
         
@@ -55,7 +56,9 @@ class Datasets(torch.utils.data.Dataset):
             self.height, self.width = img_size[1], img_size[0] 
         else:
             raise ValueError("img_size is not int or list")
-
+        
+        self.pncs:PointsNC = pncs_result
+        
         # Load Datasets Config ---------
         with open(config_file) as file:
             config = yaml.safe_load(file)
@@ -357,7 +360,8 @@ class Datasets(torch.utils.data.Dataset):
         
         ascription_field = [deepcopy(empty_field_map) for _ in range(keypoints_number*2)]  # x and y for one keypoint
         
-        
+        # print(f"ncs {self.pncs}")
+        ncs = self.pncs[0]["ncs"]
         """
         single_hand_data = {
             'hand_label': hand_label,
@@ -392,6 +396,10 @@ class Datasets(torch.utils.data.Dataset):
             points = one_hand['points']
             for point in points:
                 point_id = point["point_id"]
+                
+                x_coe = ncs[point_id]["x_coefficient"]
+                y_coe = ncs[point_id]["y_coefficient"]
+                
                 # print(f"point id in asf: {point_id}")
                 point_on_zero = deepcopy(empty_zero)
                 
@@ -424,14 +432,11 @@ class Datasets(torch.utils.data.Dataset):
                     # point_a = (blur_x, blur_y)
                     # point_a = (blur_x/self.width, blur_y/self.height)
                     
-                    # print(f"control points: {control_points}, point a: {point_a}")
-
-                   
-                    
+                    # print(f"control points: {control_points}, point a: {point_a}") 
                     # print(f"vx, vy, dis: {vx, vy, dis}\n")
                     
-                    ascription_field[point_id][blur_y][blur_x] = vx/(self.width/6)
-                    ascription_field[point_id + keypoints_number][blur_y][blur_x] = vy/(self.height/6)
+                    ascription_field[point_id][blur_y][blur_x] = vx/x_coe
+                    ascription_field[point_id + keypoints_number][blur_y][blur_x] = vy/y_coe
                     ascription_mask[blur_y][blur_x] = 1
         
         ascription_field = np.array(ascription_field, dtype=np.float64)

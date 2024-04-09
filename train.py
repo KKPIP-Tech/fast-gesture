@@ -22,6 +22,7 @@ from torch.utils.tensorboard import SummaryWriter
 from fastgesture.model.body import FastGesture
 from fastgesture.data.datasets import Datasets
 from fastgesture.data.generate import inverse_vxvyd
+from fastgesture.data.point_average_value import NormalizationCoefficient, PointsNC, GetPNCS
 from fastgesture.model.losses.loss import FocalLoss, CombinedLoss
 from fastgesture.utils.checkpoint import ckpt_load, ckpt_save, create_path
 from fastgesture.utils.common import (
@@ -83,8 +84,12 @@ def train(opt, save_path, resume=None):
     max_epoch = opt.epochs
     start_epoch = 0
     
+    # process data
+    PNCS_getter = GetPNCS(config_file=config_file, img_size=opt.img_size, save_path=save_path)
+    pncs_result:PointsNC = PNCS_getter.get_pncs()
+    
     # set datasets
-    datasets = Datasets(config_file=config_file, img_size=opt.img_size)
+    datasets = Datasets(config_file=config_file, img_size=opt.img_size, pncs_result=deepcopy(pncs_result))
     
     # cls_num = datasets.get_cls_num()
     keypoints_num = datasets.get_keypoints_num()
@@ -114,7 +119,7 @@ def train(opt, save_path, resume=None):
     user_set_optim = opt.optimizer
     optimizer = select_optim(net=model, opt=opt, user_set_optim=user_set_optim)
         
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=2, gamma=0.8)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.8)
     
     # 初始化 TensorBoard
     writer = SummaryWriter(log_dir=save_path)
@@ -194,6 +199,14 @@ def train(opt, save_path, resume=None):
                 asf_x_loss += criterion_x_ascription(
                     f_ascription[asf_i], tensor_ascription_field[asf_i]
                 )
+                image_to_show = tensor_ascription_field.permute(1, 0, 2, 3)[0][asf_i].cpu().detach().numpy()  # .astype(np.float64)
+
+                cv2.imshow(f"asf_label x", image_to_show)#np.transpose(image_to_show, (1, 2, 0)))
+
+                image_to_show = f_ascription.permute(1, 0, 2, 3)[0][asf_i].cpu().detach().numpy()  # .astype(np.float64)
+
+                cv2.imshow(f"forward asf x", image_to_show)#np.transpose(image_to_show, (1, 2, 0)))
+                cv2.waitKey(0) 
 
             asf_y_loss = 0.0
             for asf_i in range(keypoints_num, keypoints_num*2, 1):
@@ -204,15 +217,15 @@ def train(opt, save_path, resume=None):
                     f_ascription[asf_i], tensor_ascription_field[asf_i]
                 )
             
-            # print(f"asf shape: {tensor_ascription_field.shape}")
-            image_to_show = tensor_ascription_field.permute(1, 0, 2, 3)[0][0].cpu().detach().numpy()  # .astype(np.float64)
+                # print(f"asf shape: {tensor_ascription_field.shape}")
+                image_to_show = tensor_ascription_field.permute(1, 0, 2, 3)[0][asf_i].cpu().detach().numpy()  # .astype(np.float64)
 
-            cv2.imshow(f"asf_label {0}", image_to_show)#np.transpose(image_to_show, (1, 2, 0)))
+                cv2.imshow(f"asf_label y", image_to_show)#np.transpose(image_to_show, (1, 2, 0)))
 
-            image_to_show = f_ascription.permute(1, 0, 2, 3)[0][0].cpu().detach().numpy()  # .astype(np.float64)
+                image_to_show = f_ascription.permute(1, 0, 2, 3)[0][asf_i].cpu().detach().numpy()  # .astype(np.float64)
 
-            cv2.imshow(f"forward asf {[0]}", image_to_show)#np.transpose(image_to_show, (1, 2, 0)))
-            cv2.waitKey(1) 
+                cv2.imshow(f"forward asf y", image_to_show)#np.transpose(image_to_show, (1, 2, 0)))
+                cv2.waitKey(0) 
             
             # loss = (keypoint_regress_loss / tensor_kp_cls_labels.shape[0])*0.6 + (asf_loss/3)*0.4
             
@@ -267,10 +280,10 @@ def train(opt, save_path, resume=None):
         writer.add_scalar("Lr", current_lr, epoch)
             
         ckpt_save(
-            model=model, optim=optimizer, epoch=epoch, save_pth=save_path, file_name=f"epoch_{str(epoch)}",
+            model=model, optim=optimizer, epoch=epoch, pncs_result=pncs_result, save_pth=save_path, file_name=f"epoch_{str(epoch)}",
         )
         ckpt_save(
-            model=model, optim=optimizer, epoch=epoch, save_pth=save_path, file_name=f"epoch_{str(epoch)}", last=True
+            model=model, optim=optimizer, epoch=epoch, pncs_result=pncs_result, save_pth=save_path, file_name=f"epoch_{str(epoch)}", last=True
         )
         
         scheduler.step()

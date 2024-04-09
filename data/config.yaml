@@ -10,7 +10,7 @@
 #     names: 手势类别的名称列表，包含了每个手势类别的名称。
 
 # root: "/home/kd/WD_1_Data4T/Datasets/AmountData3"
-root: "/home/kd/WD_1_Data4T/Datasets/AmountData4"
+root: "/home/kd/Documents/AmountData4"
 
 resolution: [1280, 720]
 

@@ -3,11 +3,12 @@ from copy import deepcopy
 import torch
 
 
-def ckpt_save(model, optim, epoch, save_pth, file_name, best=False, last=False):
+def ckpt_save(model, optim, epoch, pncs_result, save_pth, file_name, best=False, last=False):
     ckpt = {
         "model": deepcopy(model.state_dict()),
         "optimizer": deepcopy(optim.state_dict()),
-        "epoch": epoch
+        "epoch": epoch,
+        "pncs_result":deepcopy(pncs_result)
     }
     
     save_pth = save_pth + "/weights"
