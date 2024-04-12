@@ -5,7 +5,7 @@ import torch
 
 def ckpt_save(model, optim, epoch, pncs_result, save_pth, file_name, best=False, last=False):
     ckpt = {
-        "model": deepcopy(model.state_dict()),
+        "model": deepcopy(model),
         "optimizer": deepcopy(optim.state_dict()),
         "epoch": epoch,
         "pncs_result":deepcopy(pncs_result)
@@ -39,7 +39,7 @@ def create_path(path):
 
     suffix = 1
     while True:
-        new_path = f"{path}{suffix}"
+        new_path = f"{path}_{suffix}"
         if not os.path.exists(new_path):
             os.makedirs(new_path)
             return new_path

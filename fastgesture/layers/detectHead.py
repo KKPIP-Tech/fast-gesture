@@ -18,23 +18,23 @@ class KeyPointsDH(nn.Module):
             head = nn.Sequential(
                 nn.Conv2d(in_channles, in_channles//2, kernel_size=(1, 1), padding=0),
                 # nn.BatchNorm2d(in_channles//2),
-                nn.ReLU(inplace=True),
+                nn.ReLU(inplace=False),
                 nn.Conv2d(in_channles//2, in_channles//4, kernel_size=(1, 1), padding=0),
                 # nn.BatchNorm2d(in_channles//4),
-                nn.ReLU(inplace=True),
+                nn.ReLU(inplace=False),
                 nn.Conv2d(in_channles//4, in_channles//8, kernel_size=(1, 1), padding=0),
-                nn.ReLU(inplace=True),
+                nn.ReLU(inplace=False),
                 nn.Conv2d(in_channles//8, 1, kernel_size=(1, 1), padding=0),
-                # nn.ReLU(inplace=True),
+                # nn.ReLU(inplace=False),
                 # nn.Conv2d(1, 1, kernel_size=(1, 1), padding=0),
-                # nn.ReLU(inplace=True),
+                # nn.ReLU(inplace=False),
                 nn.Sigmoid()
             )
             self.heads.append(head)
     def forward(self, x) -> list:
         # x = self.mlp(x)
         heatmaps = [head(x) for head in self.heads]
-
+        heatmaps = torch.stack(heatmaps, dim=0).squeeze(2)
         return heatmaps
 
 
@@ -44,39 +44,39 @@ class AscriptionDH(nn.Module):
         
         self.heads = nn.ModuleList()
         
-        for _ in range(keypoints_number*2):
+        for _ in range(keypoints_number*2+2):
             head = nn.Sequential(
                 
                 nn.Conv2d(8, 8, kernel_size=3, padding=1, groups=8),
                 nn.BatchNorm2d(8),  # 批次归一化
-                nn.LeakyReLU(negative_slope=0.5),  # 激活函数/，用于输出
+                nn.LeakyReLU(inplace=False, negative_slope=0.5),  # 激活函数/，用于输出
                 # nn.Tanh(),
                 nn.Conv2d(8, 8, kernel_size=1),
                 nn.BatchNorm2d(8),  # 批次归一化
-                nn.LeakyReLU(negative_slope=0.5),  # 激活函数，用于输出
+                nn.LeakyReLU(inplace=False, negative_slope=0.5),  # 激活函数，用于输出
                 # nn.Tanh(),
                 
                 nn.Conv2d(8, 4, kernel_size=(1, 1), padding=0),
-                nn.LeakyReLU(negative_slope=0.5),
-                # nn.ReLU(inplace=True),
+                nn.LeakyReLU(inplace=False, negative_slope=0.5),
+                # nn.ReLU(inplace=False),
                 # nn.Tanh(),
                 
                 # nn.Conv2d(4, 4, kernel_size=3, padding=1, groups=4),
                 # # nn.BatchNorm2d(4),  # 批次归一化
-                # # nn.ReLU(inplace=True),  # 激活函数，用于输出
+                # # nn.ReLU(inplace=False),  # 激活函数，用于输出
                 # nn.Tanh(),
                 # nn.Conv2d(4, 4, kernel_size=1),
                 # # nn.BatchNorm2d(4),  # 批次归一化
-                # # nn.ReLU(inplace=True),  # 激活函数，用于输出
+                # # nn.ReLU(inplace=False),  # 激活函数，用于输出
                 # nn.Tanh(),
                 
                 # nn.Tanh(),
                 nn.Conv2d(4, 1, kernel_size=(1, 1), padding=0),
-                nn.LeakyReLU(negative_slope=0.5),
-                # nn.ReLU(inplace=True),
+                nn.LeakyReLU(inplace=False, negative_slope=0.5),
+                # nn.ReLU(inplace=False),
                 # nn.Tanh(),
                 # nn.Conv2d(2, 1, kernel_size=(1, 1), padding=0),
-                # nn.ReLU(inplace=True),
+                # nn.ReLU(inplace=False),
                 # # # nn.Tanh(),
                 # # nn.Conv2d(8, 1, kernel_size=(1, 1), padding=0),
                 # nn.Conv2d(1, 1, kernel_size=(1, 1), padding=0),
@@ -88,7 +88,7 @@ class AscriptionDH(nn.Module):
         
     def forward(self, x) -> list:
         fields = [head(x) for head in self.heads]
-
+        fields = torch.stack(fields, dim=0).squeeze(2)
         return fields
     
 
@@ -100,26 +100,26 @@ class BboxDH(nn.Module):
         
         self.xmatchout = nn.Sequential(
             nn.Conv2d(in_channels=in_channels, out_channels=1, kernel_size=4, stride=2, padding=1),
-            nn.ReLU(inplace=True)
+            nn.ReLU(inplace=False)
         )
         
         self.up3matchx = nn.Sequential(
             nn.Conv2d(in_channels=in_channels, out_channels=1, kernel_size=1, stride=1, padding=0),
-            nn.ReLU(inplace=True),
+            nn.ReLU(inplace=False),
         )
         
         self.up2matchx = nn.Sequential(
             nn.Conv2d(in_channels=in_channels, out_channels=1, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(inplace=True)
+            nn.ReLU(inplace=False)
         )
         
         self.xywhc = nn.ModuleList()
         for _ in range(5):
             head = nn.Sequential(
                 nn.Conv2d(in_channels=1, out_channels=1, kernel_size=3, padding=1),
-                nn.ReLU(inplace=True),
+                nn.ReLU(inplace=False),
                 nn.Conv2d(in_channels=1, out_channels=1, kernel_size=3, padding=1),
-                nn.ReLU(inplace=True),
+                nn.ReLU(inplace=False),
                 nn.Conv2d(1, 1, kernel_size=(1, 1), padding=0),
                 # nn.Sigmoid()
             )
@@ -129,9 +129,9 @@ class BboxDH(nn.Module):
         for _ in range(cls_num):
             head = nn.Sequential(
                 nn.Conv2d(in_channels=1, out_channels=1, kernel_size=3, padding=1),
-                nn.ReLU(inplace=True),
+                nn.ReLU(inplace=False),
                 nn.Conv2d(in_channels=1, out_channels=1, kernel_size=3, padding=1),
-                nn.ReLU(inplace=True),
+                nn.ReLU(inplace=False),
                 nn.Conv2d(1, 1, kernel_size=(1, 1), padding=0),
                 # nn.Sigmoid()
             )

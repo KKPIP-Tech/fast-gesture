@@ -26,7 +26,7 @@ from fastgesture.data.augment import (
     resize_point,
     translate
 )
-from fastgesture.data.generate import get_vxvyd
+from fastgesture.data.generate import get_vxvyd, inverse_vxvyd
 from fastgesture.data.point_average_value import PointsNC, NormalizationCoefficient
 
 
@@ -145,7 +145,7 @@ class Datasets(torch.utils.data.Dataset):
             max_offset=max_offset,
             fill=114
         )
-        self.draw_copy = deepcopy(letterbox_image)
+        self.draw_copy = cv2.cvtColor(deepcopy(letterbox_image), cv2.COLOR_GRAY2BGR)
         # cv2.imshow("letterbox_image", letterbox_image)
         # cv2.waitKey(1)
         
@@ -204,6 +204,9 @@ class Datasets(torch.utils.data.Dataset):
             
             control_point = (center_x, center_y)
             
+            cv2.circle(self.draw_copy, (int(center_x), int(center_y)), 3, (0, 255, 0), 1)
+            
+            
             # print(f"control point: {control_point}")
             
             single_hand_data:PrepocessLabel = {
@@ -248,6 +251,9 @@ class Datasets(torch.utils.data.Dataset):
             left_padding=left_padding,
             top_padding=top_padding
         )
+        
+        # cv2.imshow(f"Center Point", cv2.resize(self.draw_copy, (640, 640)))
+        # cv2.waitKey(0)
         # print(f"ascription image: {ascription_field.shape}")
         # cv2.imshow("ascription img", np.transpose(ascription_field, (1, 2, 0))*255)
         # cv2.waitKey(0)
@@ -293,16 +299,17 @@ class Datasets(torch.utils.data.Dataset):
                 temp_heatmap = keypoint_classfication_label[point_id]
                 # print(f"temp_heatmap x:{x}, y{y}")
                 # print()
+                cv2.circle(temp_heatmap, (x, y), 2, 1, -1)
                 
-                Y, X = np.ogrid[:temp_heatmap.shape[0], :temp_heatmap.shape[1]]
-                distance_from_center = np.sqrt((Y - y)**2 + (X - x)**2)
+                # Y, X = np.ogrid[:temp_heatmap.shape[0], :temp_heatmap.shape[1]]
+                # distance_from_center = np.sqrt((Y - y)**2 + (X - x)**2)
                 
-                # 创建一个与heatmap形状相同的mask，其中圆内的区域为True，其他为False
-                radius = 3  # pixel
-                mask = distance_from_center <= radius
+                # # 创建一个与heatmap形状相同的mask，其中圆内的区域为True，其他为False
+                # radius = 3  # pixel
+                # mask = distance_from_center <= radius
                 
-                # 使用mask来更新heatmap上的值
-                temp_heatmap[mask] = 1
+                # # 使用mask来更新heatmap上的值
+                # temp_heatmap[mask] = 1
                 
                 # temp_heatmap[y][x] = 1
                 keypoint_classfication_label[point_id] = temp_heatmap
@@ -358,7 +365,7 @@ class Datasets(torch.utils.data.Dataset):
         
         keypoints_number = len(self.target_points_id)
         
-        ascription_field = [deepcopy(empty_field_map) for _ in range(keypoints_number*2)]  # x and y for one keypoint
+        ascription_field = [deepcopy(empty_field_map) for _ in range(keypoints_number*2+2)]  # x and y for one keypoint, last 2 maps, if <0 
         
         # print(f"ncs {self.pncs}")
         ncs = self.pncs[0]["ncs"]
@@ -416,16 +423,53 @@ class Datasets(torch.utils.data.Dataset):
                 
                 point_a = (x, y)
                 # point_a = (x_n, y_n)
-                point_on_zero[y][x] = 255                
-                blurred_image = cv2.GaussianBlur(point_on_zero, (5, 5), 0)
-                y_coords, x_coords = np.where(blurred_image > 1)
+                # point_on_zero[y][x] = 255                
+                # blurred_image = cv2.GaussianBlur(point_on_zero, (5, 5), 0)
+                
+                expand_pixels = 2
+                
+                cv2.circle(point_on_zero, point_a, expand_pixels, (255, 255, 255), -1)
+                cv2.circle(point_on_zero, control_points, expand_pixels, (255, 255, 255), -1)
+                
+                # 计算两点之间的距离和角度
+                dx = control_points[0] - point_a[0]
+                dy = control_points[1] - point_a[1]
+                distance = np.sqrt(dx**2 + dy**2)
+                angle = np.arctan2(dy, dx)
+
+                
+                
+                # 计算长方形的四个顶点
+                offset_x = expand_pixels * np.sin(angle)
+                offset_y = expand_pixels * np.cos(angle)
+                p1 = (int(point_a[0] - offset_x), int(point_a[1] + offset_y))
+                p2 = (int(point_a[0] + offset_x), int(point_a[1] - offset_y))
+                p3 = (int(control_points[0] + offset_x), int(control_points[1] - offset_y))
+                p4 = (int(control_points[0] - offset_x), int(control_points[1] + offset_y))
+
+                # 绘制长方形
+                pts = np.array([p1, p2, p3, p4], np.int32)
+                cv2.fillPoly(point_on_zero, [pts], (255, 255, 255))
+                
+                
+                y_coords, x_coords = np.where(point_on_zero > 1)
                 
                 # cv2.line(self.draw_copy, control_points, (x, y), (0, 255, 0), 1, 1)
                 # cv2.imshow("draw_line", cv2.resize(self.draw_copy, (640, 640)))
                 # cv2.waitKey()
                 
                 vx, vy, dis = get_vxvyd(point_a=point_a, control_point=control_points)
+                # print(f"vx, vy: {vx, x_coe, vy, y_coe}")
+                vx = vx/x_coe
+                vy = vy/y_coe
                 
+                x_minus:bool = True if vx < 0 else False
+                y_minus:bool = True if vy < 0 else False
+                
+                
+                eval_vx, eval_vy = vx*x_coe, vy*y_coe
+                end_x, end_y = inverse_vxvyd((x, y), eval_vx, eval_vy)
+                cv2.line(self.draw_copy, (x, y), (int(end_x), int(end_y)), (255, 0, 0), 1, 1)
                 
                 for blur_x, blur_y in zip(x_coords, y_coords):
                     # print(f"x: {x}, y: {y}")
@@ -435,8 +479,18 @@ class Datasets(torch.utils.data.Dataset):
                     # print(f"control points: {control_points}, point a: {point_a}") 
                     # print(f"vx, vy, dis: {vx, vy, dis}\n")
                     
-                    ascription_field[point_id][blur_y][blur_x] = vx/x_coe
-                    ascription_field[point_id + keypoints_number][blur_y][blur_x] = vy/y_coe
+                    ascription_field[point_id][blur_y][blur_x] = -vx if x_minus else vx
+                    # print("keypoints_number",len(ascription_field),point_id,  keypoints_number)
+                    ascription_field[point_id + keypoints_number][blur_y][blur_x] = -vy if y_minus else vy
+                    
+                    # cv2.imshow("test", ascription_field[point_id])
+
+                    
+                    if x_minus: 
+                        ascription_field[-2][blur_y][blur_x] = 1
+                    if y_minus: 
+                        ascription_field[-1][blur_y][blur_x] = 1
+                    
                     ascription_mask[blur_y][blur_x] = 1
         
         ascription_field = np.array(ascription_field, dtype=np.float64)

@@ -18,6 +18,7 @@ import torch.nn as nn
 from torch import optim
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from torchsummary import summary
 
 from fastgesture.model.body import FastGesture
 from fastgesture.data.datasets import Datasets
@@ -104,7 +105,7 @@ def train(opt, save_path, resume=None):
     
     # set model
     model = FastGesture(keypoints_num=keypoints_num).to(device)
-    
+    summary(model, input_size=(1, 160, 160), batch_size=-1, device=device)
     # set loss
     # Loss函数定义
     # criterion_heatmap = FocalLoss(alpha=2, gamma=2)
@@ -114,6 +115,9 @@ def train(opt, save_path, resume=None):
     # criterion_ascription = nn.SmoothL1Loss(reduction='sum').to(device=device)
     criterion_x_ascription = nn.MSELoss(reduction='mean').to(device=device)
     criterion_y_ascription = nn.MSELoss(reduction='mean').to(device=device)
+    
+    criterion_x_minus = nn.MSELoss(reduction='mean').to(device=device)
+    criterion_y_minus = nn.MSELoss(reduction='mean').to(device=device)
   
     # set optimizer
     user_set_optim = opt.optimizer
@@ -126,7 +130,7 @@ def train(opt, save_path, resume=None):
     
     if resume is not None:
         resume_model, resume_optim, resume_start_epoch = ckpt_load(resume)
-        model.load_state_dict(resume_model, strict=True)
+        model = resume_model
         start_epoch = resume_start_epoch
         optimizer.load_state_dict(resume_optim)
         
@@ -158,11 +162,13 @@ def train(opt, save_path, resume=None):
             
             optimizer.zero_grad()
             
-            f_keypoints_classification, f_ascription = model(tensor_letterbox_img)
+            forward = model(tensor_letterbox_img)
             
-            f_keypoints_classification = torch.stack(f_keypoints_classification, dim=0).squeeze(2)
-            # f_bbox_label = torch.stack(f_bbox_label, dim=0).squeeze(2)
-            f_ascription = torch.stack(f_ascription, dim=0).squeeze(2)
+            f_keypoints_classification, f_ascription = forward.heatmaps, forward.ascription_field
+            
+            # f_keypoints_classification = torch.stack(f_keypoints_classification, dim=0).squeeze(2)
+            # # f_bbox_label = torch.stack(f_bbox_label, dim=0).squeeze(2)
+            # f_ascription = torch.stack(f_ascription, dim=0).squeeze(2)
             
             
             
@@ -199,14 +205,16 @@ def train(opt, save_path, resume=None):
                 asf_x_loss += criterion_x_ascription(
                     f_ascription[asf_i], tensor_ascription_field[asf_i]
                 )
-                image_to_show = tensor_ascription_field.permute(1, 0, 2, 3)[0][asf_i].cpu().detach().numpy()  # .astype(np.float64)
+                
+                
+            image_to_show = tensor_ascription_field.permute(1, 0, 2, 3)[0][0].cpu().detach().numpy()  # .astype(np.float64)
 
-                cv2.imshow(f"asf_label x", image_to_show)#np.transpose(image_to_show, (1, 2, 0)))
+            cv2.imshow(f"asf_label x", image_to_show)#np.transpose(image_to_show, (1, 2, 0)))
 
-                image_to_show = f_ascription.permute(1, 0, 2, 3)[0][asf_i].cpu().detach().numpy()  # .astype(np.float64)
-
-                cv2.imshow(f"forward asf x", image_to_show)#np.transpose(image_to_show, (1, 2, 0)))
-                cv2.waitKey(0) 
+            image_to_show = f_ascription.permute(1, 0, 2, 3)[0][0].cpu().detach().numpy()  # .astype(np.float64)
+            # print(f"max value in number {asf_i} asf map is: {np.max(image_to_show)}")
+            cv2.imshow(f"forward asf x", image_to_show)#np.transpose(image_to_show, (1, 2, 0)))
+            # cv2.waitKey(0) 
 
             asf_y_loss = 0.0
             for asf_i in range(keypoints_num, keypoints_num*2, 1):
@@ -218,20 +226,34 @@ def train(opt, save_path, resume=None):
                 )
             
                 # print(f"asf shape: {tensor_ascription_field.shape}")
-                image_to_show = tensor_ascription_field.permute(1, 0, 2, 3)[0][asf_i].cpu().detach().numpy()  # .astype(np.float64)
+            image_to_show = tensor_ascription_field.permute(1, 0, 2, 3)[0][12].cpu().detach().numpy()  # .astype(np.float64)
 
-                cv2.imshow(f"asf_label y", image_to_show)#np.transpose(image_to_show, (1, 2, 0)))
+            cv2.imshow(f"asf_label y", image_to_show)#np.transpose(image_to_show, (1, 2, 0)))
 
-                image_to_show = f_ascription.permute(1, 0, 2, 3)[0][asf_i].cpu().detach().numpy()  # .astype(np.float64)
+            image_to_show = f_ascription.permute(1, 0, 2, 3)[0][12].cpu().detach().numpy()  # .astype(np.float64)
 
-                cv2.imshow(f"forward asf y", image_to_show)#np.transpose(image_to_show, (1, 2, 0)))
-                cv2.waitKey(0) 
+            cv2.imshow(f"forward asf y", image_to_show)#np.transpose(image_to_show, (1, 2, 0)))
+            # cv2.waitKey(1) 
             
+            
+            x_minus_loss = criterion_x_minus(f_ascription[-2], tensor_ascription_field[-2])
+            image_to_show = tensor_ascription_field.permute(1, 0, 2, 3)[0][-2].cpu().detach().numpy()  # .astype(np.float64)
+            cv2.imshow(f"asf_x_minus_label", image_to_show)#np.transpose(image_to_show, (1, 2, 0)))
+            image_to_show = f_ascription.permute(1, 0, 2, 3)[0][-2].cpu().detach().numpy()  # .astype(np.float64)
+            cv2.imshow(f"forward asf_x_minus", image_to_show)#np.transpose(image_to_show, (1, 2, 0)))
+            # cv2.waitKey(1) 
+            
+            y_minus_loss = criterion_y_minus(f_ascription[-1], tensor_ascription_field[-1])
+            image_to_show = tensor_ascription_field.permute(1, 0, 2, 3)[0][-1].cpu().detach().numpy()  # .astype(np.float64)
+            cv2.imshow(f"asf_y_minus_label", image_to_show)#np.transpose(image_to_show, (1, 2, 0)))
+            image_to_show = f_ascription.permute(1, 0, 2, 3)[0][-1].cpu().detach().numpy()  # .astype(np.float64)
+            cv2.imshow(f"forward asf_y_minus", image_to_show)#np.transpose(image_to_show, (1, 2, 0)))
+            cv2.waitKey(1) 
             # loss = (keypoint_regress_loss / tensor_kp_cls_labels.shape[0])*0.6 + (asf_loss/3)*0.4
             
             # loss = (keypoint_regress_loss / tensor_kp_cls_labels.shape[0]) + (asf_loss/keypoints_num*2)
             
-            loss = keypoint_regress_loss + asf_x_loss + asf_y_loss
+            loss = keypoint_regress_loss*1.5 + asf_x_loss + asf_y_loss + x_minus_loss + y_minus_loss
             
             # print(f'Loss: {loss}')
             
@@ -260,6 +282,7 @@ def train(opt, save_path, resume=None):
             
             avg_loss = total_loss/(index+1)
            
+           
             if device == 'cuda':
             # 获取当前程序占用的GPU显存（以字节为单位）
                 gpu_memory_bytes = torch.cuda.memory_reserved(device)
@@ -273,7 +296,13 @@ def train(opt, save_path, resume=None):
             # 将 Loss 写入文本文件
             with open(f"{save_path}/log.txt", "a") as f:
                 f.write(f"Epoch: {epoch}, cur_lr: {current_lr:.10f}, Batch: {index}, AVG Loss: {avg_loss}, Total Loss: {total_loss}\n")
-
+            
+            # ckpt_save(
+            #     model=model, optim=optimizer, epoch=epoch, pncs_result=pncs_result, save_pth=save_path, file_name=f"epoch_{str(epoch)}",
+            # )
+            
+            # traced_model = torch.jit.trace(model.cuda(), torch.randn(1, 1, 320, 320).cuda())
+            # traced_model.save("./run/train/20240411/weights/jit.pt")
         # 使用 TensorBoard 记录 Loss
         writer.add_scalar("Avg Loss", avg_loss, epoch)
         writer.add_scalar("Total Loss", total_loss, epoch)

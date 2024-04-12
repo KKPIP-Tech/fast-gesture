@@ -42,7 +42,7 @@ class PointsNC(TypedDict):
     ncs: List[NormalizationCoefficient]
     
 class GetPNCS:
-    def __init__(self, config_file:str, img_size:Union[int, list], save_path:str=None, value_thres:List[float]=[0.8, 0.8]) -> None:
+    def __init__(self, config_file:str, img_size:Union[int, list], save_path:str=None, value_thres:List[float]=[0.6, 0.6]) -> None:
         
         print(rf"The dataset profile has been successfully loaded from \"{config_file}\"")
         
@@ -63,7 +63,7 @@ class GetPNCS:
         print(rf"The datasets path is \"{self.datasets_path}\"")
         self.datapack:list = self.load_data(
             datasets_path=self.datasets_path,
-            limit=10000
+            # limit=100
         )
         shuffle(self.datapack)
         self.target_points_id:list = config['target_points_id']
@@ -172,7 +172,7 @@ class GetPNCS:
         with open(self.datasets_path + "/" + "datasets_info.json", "w") as new_json:
             json.dump([result], new_json, indent=4)
         
-        return result
+        return [result]
                 
     @staticmethod
     def load_data(datasets_path, limit:int = -1):

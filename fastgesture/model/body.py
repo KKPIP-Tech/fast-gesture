@@ -2,7 +2,7 @@ import os
 import sys
 import cv2
 import numpy as np
-
+from collections import namedtuple
 ROOT = os.getcwd()
 if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT))
@@ -25,6 +25,7 @@ from fastgesture.layers.dsc import DepthwiseSeparableConv
 from fastgesture.layers.mlp import MLP
 from fastgesture.layers.detectHead import KeyPointsDH, AscriptionDH, BboxDH
 
+OUTPUT = namedtuple('Output', ['heatmaps', 'ascription_field'])
 
 class FastGesture(nn.Module):
     def __init__(self, keypoints_num:int=11) -> None:
@@ -72,11 +73,11 @@ class FastGesture(nn.Module):
         UNET_output_channel = 64      
         self.unet_to_asf = nn.Sequential(
             nn.Conv2d(UNET_output_channel, UNET_output_channel//2, kernel_size=(1, 1), padding=0),
-            nn.LeakyReLU(inplace=True, negative_slope=0.5),
+            nn.ReLU(inplace=True),
             nn.Conv2d(UNET_output_channel//2, UNET_output_channel//4, kernel_size=(1, 1), padding=0),
-            nn.LeakyReLU(inplace=True, negative_slope=0.5),
+            nn.ReLU(inplace=True),
             nn.Conv2d(UNET_output_channel//4, UNET_output_channel//8, kernel_size=(1, 1), padding=0),
-            nn.LeakyReLU(inplace=True, negative_slope=0.5),
+            nn.ReLU(inplace=True),
             nn.Conv2d(UNET_output_channel//8, 1, kernel_size=(1, 1), padding=0),
             # nn.Sigmoid()
         )
@@ -152,37 +153,11 @@ class FastGesture(nn.Module):
         asf_light_out1 = self.asf_light_conv(asf_deep_out6)
         asf_light_out2 = self.asf_light_conv(asf_light_out1)
         
-        # asf_stage1 = asf_light_out2 + asf_unet_down
-        
-        # asf_deep_out1 = self.asf_deep_conv(asf_stage1)
-        # asf_deep_out2 = self.asf_deep_conv(asf_deep_out1+asf_x_down)
-        # asf_deep_out3 = self.asf_deep_conv(asf_deep_out2)
-        # asf_deep_out4 = self.asf_deep_conv(asf_deep_out3+asf_x_down)
-        # asf_deep_out5 = self.asf_deep_conv(asf_deep_out4)
-        # asf_deep_out6 = self.asf_deep_conv(asf_deep_out5+asf_x_down)
-        
-        # asf_light_out1 = self.asf_light_conv(asf_deep_out6)
-        # asf_light_out2 = self.asf_light_conv(asf_light_out1+asf_x_down)
-        
-        # asf_stage1 = asf_light_out2 + asf_stage1 + asf_unet_down + asf_x_down
-        
         asf_up = self.asf_up_conv(asf_light_out2)
-        
-        # asf_stage2 = asf_light_out2 + asf_stage1
-        
-        # AF_UOut = self.ascriptionUNETOutputDSC(UNET_output)
-        # AF_UOut = self.ascriptionUNETOutputDSC(AF_UOut)
-        # AF_UOut = self.ascriptionUNETOutputDSC(AF_UOut)
-        
-        # AF_UDS1 = self.ascriptionUNETDownSampleDSC(DC1)
-        # AF_UDS1 = self.ascriptionUNETDownSampleDSC(AF_UDS1)
-        # AF_UDS1 = self.ascriptionUNETDownSampleDSC(AF_UDS1)
-        
-        # AF_Add = AF_UOut + AF_UDS1  # [Batch, 8, 320, 320]
 
         ascription_field = self.Ascription(asf_up)
                         
-        return heatmaps, ascription_field
+        return OUTPUT(heatmaps=heatmaps, ascription_field=ascription_field)  #torch.stack([heatmaps, ascription_field],dim=0)
     
 
 if __name__ == "__main__":
