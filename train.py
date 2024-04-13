@@ -19,7 +19,9 @@ from torch import optim
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchsummary import summary
+from thop import profile
 
+from evaler import Evaler
 from fastgesture.model.body import FastGesture
 from fastgesture.data.datasets import Datasets
 from fastgesture.data.generate import inverse_vxvyd
@@ -90,22 +92,39 @@ def train(opt, save_path, resume=None):
     pncs_result:PointsNC = PNCS_getter.get_pncs()
     
     # set datasets
-    datasets = Datasets(config_file=config_file, img_size=opt.img_size, pncs_result=deepcopy(pncs_result))
+    datasets = Datasets(config_file=config_file, img_size=opt.img_size, pncs_result=deepcopy(pncs_result), limit=None)
     
     # cls_num = datasets.get_cls_num()
     keypoints_num = datasets.get_keypoints_num()
     
     dataloader_workers = opt.workers if opt.workers < get_core_num()[1] else get_core_num()[1]
-    dataloader = DataLoader(
+    dataloader:DataLoader = DataLoader(
         dataset=datasets,
         batch_size=opt.batch_size,
         num_workers=dataloader_workers,
         shuffle=True
     )
     
+    eval_datasets = Datasets(config_file=config_file, img_size=opt.img_size, pncs_result=deepcopy(pncs_result), limit=200)
+    eval_dataloader:DataLoader = DataLoader(
+        dataset=eval_datasets,
+        batch_size=1,
+        num_workers=dataloader_workers,
+        shuffle=True
+    )
+    
+    # 初始化 TensorBoard
+    writer = SummaryWriter(log_dir=save_path)
+    
     # set model
     model = FastGesture(keypoints_num=keypoints_num).to(device)
-    summary(model, input_size=(1, 160, 160), batch_size=-1, device=device)
+    
+    evaler:Evaler = Evaler(model=model, dataloader=eval_dataloader, device=device, tensorboard_writer=writer)
+    
+    input1 = torch.randn(1, 1, opt.img_size, opt.img_size).to(device)
+    flops, params = profile(model, inputs=(input1, ))
+    summary(model, input_size=(1, opt.img_size, opt.img_size), batch_size=-1, device=device)
+    print(f"Model FLOPs: {flops/1000**3:.2f} G, Params: {params/1000**2:.2f} M \n")
     # set loss
     # Loss函数定义
     # criterion_heatmap = FocalLoss(alpha=2, gamma=2)
@@ -123,16 +142,16 @@ def train(opt, save_path, resume=None):
     user_set_optim = opt.optimizer
     optimizer = select_optim(net=model, opt=opt, user_set_optim=user_set_optim)
         
+    
+    
+    
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.8)
-    
-    # 初始化 TensorBoard
-    writer = SummaryWriter(log_dir=save_path)
-    
     if resume is not None:
         resume_model, resume_optim, resume_start_epoch = ckpt_load(resume)
         model = resume_model
         start_epoch = resume_start_epoch
         optimizer.load_state_dict(resume_optim)
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.8, last_epoch=start_epoch-1)
         
     for epoch in range(start_epoch, max_epoch):
         model.train()
@@ -289,9 +308,9 @@ def train(opt, save_path, resume=None):
                 # print(f"gpu_memory_bytes {gpu_memory_bytes}")
                 # 将字节转换为GB
                 gpu_memory_GB = round(gpu_memory_bytes / 1024 / 1024 / 1024, 2)
-                pbar.set_description(f"Epoch {epoch}, GPU {gpu_memory_GB} G, cur_lr {current_lr:.10f}, avg_l {avg_loss:.10f}")
+                pbar.set_description(f"[Epoch {epoch}, GPU {gpu_memory_GB} G, cur_lr {current_lr:.10f}, avg_l {avg_loss:.10f}] -> ")
             else:
-                pbar.set_description(f"Epoch {epoch}, cur_lr {current_lr:.10f}, avg_l {avg_loss:.10f}")
+                pbar.set_description(f"[Epoch {epoch}, cur_lr {current_lr:.10f}, avg_l {avg_loss:.10f}] -> ")
             
             # 将 Loss 写入文本文件
             with open(f"{save_path}/log.txt", "a") as f:
@@ -304,9 +323,12 @@ def train(opt, save_path, resume=None):
             # traced_model = torch.jit.trace(model.cuda(), torch.randn(1, 1, 320, 320).cuda())
             # traced_model.save("./run/train/20240411/weights/jit.pt")
         # 使用 TensorBoard 记录 Loss
+        
         writer.add_scalar("Avg Loss", avg_loss, epoch)
         writer.add_scalar("Total Loss", total_loss, epoch)
         writer.add_scalar("Lr", current_lr, epoch)
+        
+        evaler._eval(epoch=epoch)
             
         ckpt_save(
             model=model, optim=optimizer, epoch=epoch, pncs_result=pncs_result, save_pth=save_path, file_name=f"epoch_{str(epoch)}",

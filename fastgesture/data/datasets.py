@@ -46,7 +46,7 @@ class PrepocessLabel(TypedDict):
 
 
 class Datasets(torch.utils.data.Dataset):
-    def __init__(self, config_file, img_size, pncs_result:PointsNC) -> None:
+    def __init__(self, config_file, img_size, pncs_result:PointsNC, limit=None) -> None:
         
         print(f"Datasets Config File: {config_file}")
         
@@ -76,7 +76,7 @@ class Datasets(torch.utils.data.Dataset):
         self.datapack = self.load_data(
             names=self.names, 
             datasets_path=self.datasets_path,
-            limit=None)
+            limit=limit)
         
     def __getitem__(self, index):
         # get image path, lebel path, name index
@@ -522,13 +522,17 @@ class Datasets(torch.utils.data.Dataset):
                         [img, leb]
                     )
                     index_count += 1
-                    if limit is None:
-                        continue
-                    if index_count < limit:
-                        continue
-                    break
+                    # if limit is None:
+                    #     continue
+                    # # if index_count < limit:
+                    # #     continue
+                    # break
+        random.shuffle(datapack)
         
-        return datapack
+        if limit is None:
+            return datapack
+    
+        return datapack[:limit]
     
     def get_keypoints_index(self, id):
         keypoints_id = self.target_points_id

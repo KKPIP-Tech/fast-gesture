@@ -169,8 +169,8 @@ class FGInfer:
                 x_coe = self.pncs[keypoints_type]["x_coefficient"]
                 y_coe = self.pncs[keypoints_type]["y_coefficient"]
                 
-                x_minus:bool = True if ascription_maps[-2][center_y][center_x] > 0.5 else False
-                y_minus:bool = True if ascription_maps[-1][center_y][center_x] > 0.5 else False
+                x_minus:bool = True if ascription_maps[-2][center_y][center_x] > 0.3 else False
+                y_minus:bool = True if ascription_maps[-1][center_y][center_x] > 0.3 else False
                 
                 print(f"max value in number {keypoints_type} asf map is: {np.max(ascription_maps[keypoints_type])}")
                 # vx = vx*(self.img_size[0]*6)
@@ -213,7 +213,7 @@ if __name__ == "__main__":
     import time
     weight:str = "/home/kd/Documents/Codes/fast-gesture/run/train/20240412/weights/last.pt"
     
-    fg_model = FGInfer(device='cuda', img_size=(160, 160), weights=weight, conf=0.3, keypoints_num=11)
+    fg_model = FGInfer(device='cuda', img_size=(160, 160), weights=weight, conf=0.4, keypoints_num=11)
     
     capture = cv2.VideoCapture(0)
     
@@ -223,7 +223,7 @@ if __name__ == "__main__":
     while True:
         st = time.time()
         frame = cv2.imread(img)       
-        ret, frame = capture.read()
+        # ret, frame = capture.read()
         cv2.imshow(f"Frame", frame)
         letterbox_image, keypoints = fg_model.infer(image=frame)
         letterbox_image = cv2.cvtColor(letterbox_image, cv2.COLOR_GRAY2BGR)

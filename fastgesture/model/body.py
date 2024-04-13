@@ -44,11 +44,11 @@ class FastGesture(nn.Module):
         self.UNETDownConv4 = CommonConv(128, 128)  # Use Res Connect
         self.UNETDownSample4 = DownSample(128)
         
-        self.UNETDownConv5 = CommonConv(128, 256)
+        self.UNETDownConv5 = CommonConv(128, 128)
         
         # UNET UpSample -----------------------------------
-        self.UNETUpSample1 = UpSample(256)
-        self.UNETUpConv1 = CommonConv(256, 128)
+        self.UNETUpSample1 = UpSample(128)
+        self.UNETUpConv1 = CommonConv(192, 128)
         
         self.UNETUpSample2 = UpSample(128)
         self.UNETUpConv2 = CommonConv(192, 64)
@@ -61,10 +61,10 @@ class FastGesture(nn.Module):
         
         # MLP ---------------------------------------------
         self.UNETMlp1 = MLP(128)
-        self.UNETMlp2 = MLP(256)
+        self.UNETMlp2 = MLP(128)
         
         # DSC ---------------------------------------------
-        self.UNETDSC = DepthwiseSeparableConv(256, 256)
+        self.UNETDSC = DepthwiseSeparableConv(128, 128)
         
         self.ascriptionUNETOutputDSC = DepthwiseSeparableConv(64, 64)
         self.ascriptionUNETDownSampleDSC = DepthwiseSeparableConv(64, 64)

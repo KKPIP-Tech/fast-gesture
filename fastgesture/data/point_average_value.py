@@ -85,6 +85,8 @@ class GetPNCS:
         if os.path.exists(exists_datasets_info):
             with open(exists_datasets_info) as label_file:
                 label_json = json.load(label_file)
+            for index, line in enumerate(label_json[0]["ncs"]):
+                print(f"{index} Point NC: {line}")
             return label_json
         
         x_coe_list = [deepcopy([]) for _ in range(len(self.target_points_id))]
