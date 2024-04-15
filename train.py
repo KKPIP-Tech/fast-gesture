@@ -105,7 +105,7 @@ def train(opt, save_path, resume=None):
         shuffle=True
     )
     
-    eval_datasets = Datasets(config_file=config_file, img_size=opt.img_size, pncs_result=deepcopy(pncs_result), limit=200)
+    eval_datasets = Datasets(config_file=config_file, img_size=opt.img_size, pncs_result=deepcopy(pncs_result), limit=2000)
     eval_dataloader:DataLoader = DataLoader(
         dataset=eval_datasets,
         batch_size=1,
@@ -125,13 +125,10 @@ def train(opt, save_path, resume=None):
     flops, params = profile(model, inputs=(input1, ))
     summary(model, input_size=(1, opt.img_size, opt.img_size), batch_size=-1, device=device)
     print(f"Model FLOPs: {flops/1000**3:.2f} G, Params: {params/1000**2:.2f} M \n")
+    
     # set loss
     # Loss函数定义
-    # criterion_heatmap = FocalLoss(alpha=2, gamma=2)
     criterion_heatmap = nn.MSELoss().to(device=device)
-    # criterion_bbox = nn.L1Loss().to(device=device)
-    # criterion_confidence = nn.BCEWithLogitsLoss().to(device=device)
-    # criterion_ascription = nn.SmoothL1Loss(reduction='sum').to(device=device)
     criterion_x_ascription = nn.MSELoss(reduction='mean').to(device=device)
     criterion_y_ascription = nn.MSELoss(reduction='mean').to(device=device)
     
@@ -141,9 +138,6 @@ def train(opt, save_path, resume=None):
     # set optimizer
     user_set_optim = opt.optimizer
     optimizer = select_optim(net=model, opt=opt, user_set_optim=user_set_optim)
-        
-    
-    
     
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.8)
     if resume is not None:

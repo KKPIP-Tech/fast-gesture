@@ -104,6 +104,6 @@ class Evaler:
                 f"[Epoch {epoch} Eval | loss: {avg_loss:.10f}] -> "
             )
         
-        self.tensorboard_writer.add_scalar("Val Avg Loss", avg_loss, epoch)
+        self.tensorboard_writer.add_scalar("val average loss", avg_loss, epoch)
         print()
                 

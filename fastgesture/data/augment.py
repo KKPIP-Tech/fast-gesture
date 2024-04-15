@@ -190,6 +190,31 @@ def translate(image, max_offset, fill=114):
     
     return translated_image, offset_x, offset_y
 
+def exposure(image, exposure):
+    B, G, R = cv2.split(image)
+    B = B.astype(float)
+    G = G.astype(float)
+    R = R.astype(float)
+    
+    # 调整曝光度
+    B += exposure
+    G += exposure
+    R += exposure
+    
+    # 保证调整后的像素值仍然在合法范围内 [0, 255]
+    B = np.clip(B, 0, 255)
+    G = np.clip(G, 0, 255)
+    R = np.clip(R, 0, 255)
+    
+    # 转换回 uint8
+    B = B.astype(np.uint8)
+    G = G.astype(np.uint8)
+    R = R.astype(np.uint8)
+    
+    image = cv2.merge((B, G, R))
+    
+    return image    
+
 if __name__ == "__main__":
     image = cv2.cvtColor(cv2.imread("/home/kd/Documents/Codes/fast-gesture/101.jpg"), cv2.COLOR_BGR2GRAY)
     new_img = shearing_img(image=image, shearing_factor=0.5, axis=0)

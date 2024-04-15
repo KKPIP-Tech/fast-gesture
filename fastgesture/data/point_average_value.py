@@ -44,7 +44,7 @@ class PointsNC(TypedDict):
 class GetPNCS:
     def __init__(self, config_file:str, img_size:Union[int, list], save_path:str=None, value_thres:List[float]=[0.6, 0.6]) -> None:
         
-        print(rf"The dataset profile has been successfully loaded from \"{config_file}\"")
+        print(rf"The dataset profile has been successfully loaded from {config_file}")
         
         if isinstance(img_size, int):
             self.height, self.width = img_size, img_size
@@ -59,14 +59,14 @@ class GetPNCS:
         with open(config_file) as file:
             config = yaml.safe_load(file)
 
-        self.datasets_path:str = config['root']
-        print(rf"The datasets path is \"{self.datasets_path}\"")
+        self.datasets_path:str = config['train_set']
+        print(rf"The datasets path is: {self.datasets_path}")
         self.datapack:list = self.load_data(
             datasets_path=self.datasets_path,
             # limit=100
         )
+        self._keypoints_cls_num:int = config['keypoints_classes_num']
         shuffle(self.datapack)
-        self.target_points_id:list = config['target_points_id']
         self.save_path:str = save_path
         
         self.image_hw_info:list = []
@@ -77,7 +77,7 @@ class GetPNCS:
             "x_coefficient": 0,
             "y_coefficient": 0
         }
-        self.ncs:List[NormalizationCoefficient] = [deepcopy(template) for _ in range(len(self.target_points_id))]
+        self.ncs:List[NormalizationCoefficient] = [deepcopy(template) for _ in range(self._keypoints_cls_num)]
     
     def get_pncs(self) -> PointsNC:
         
@@ -89,8 +89,8 @@ class GetPNCS:
                 print(f"{index} Point NC: {line}")
             return label_json
         
-        x_coe_list = [deepcopy([]) for _ in range(len(self.target_points_id))]
-        y_coe_list = [deepcopy([]) for _ in range(len(self.target_points_id))]
+        x_coe_list = [deepcopy([]) for _ in range(self._keypoints_cls_num)]
+        y_coe_list = [deepcopy([]) for _ in range(self._keypoints_cls_num)]
         
         for img_path, leb_path in tqdm(self.datapack, desc="Loading Data", unit=" items"):
             # image = cv2.imread(img_path)
