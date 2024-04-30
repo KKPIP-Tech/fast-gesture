@@ -1,15 +1,11 @@
 import os
 import sys
-import cv2
-import numpy as np
-from collections import namedtuple
 ROOT = os.getcwd()
 if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT))
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torchsummary import summary
 
 from fastgesture.layers.downSample import DownSample
@@ -24,8 +20,6 @@ from fastgesture.layers.conv import (
 from fastgesture.layers.dsc import DepthwiseSeparableConv
 from fastgesture.layers.mlp import MLP
 from fastgesture.layers.detectHead import KeyPointsDH, AscriptionDH, BboxDH
-
-OUTPUT = namedtuple('Output', ['heatmaps', 'ascription_field'])
 
 class FastGesture(nn.Module):
     def __init__(self, keypoints_num:int=11) -> None:
@@ -93,7 +87,6 @@ class FastGesture(nn.Module):
     def forward(self, x):
         
         # x shape: [Batch, 1, 320, 320]
-
         # UNET Down Sample
         DC1 = self.UNETDownConv1(x)  # [Batch, 8, 320, 320]
         DS1 = self.UNETDownSample1(DC1)  # [Batch, 8, 160, 160]
@@ -137,7 +130,7 @@ class FastGesture(nn.Module):
         asf_unet = self.unet_to_asf(UNET_output)
         
         # Get Keypoints Classifications Heatmap
-        heatmaps = self.UNETKeypointsDH(UNET_output)  # [keypoints_num, Batch, 1, 320, 320]
+        heatmaps:list = self.UNETKeypointsDH(UNET_output)  # [keypoints_num, Batch, 1, 320, 320]
         
         # Get Ascription Field
         # asf_x_down = self.asf_down_conv(x)
@@ -156,8 +149,12 @@ class FastGesture(nn.Module):
         asf_up = self.asf_up_conv(asf_light_out2)
 
         ascription_field = self.Ascription(asf_up)
+        
+        heatmaps.extend(ascription_field)
+        
+        output = torch.stack(heatmaps, dim=0).squeeze(2)
                         
-        return OUTPUT(heatmaps=heatmaps, ascription_field=ascription_field)  #torch.stack([heatmaps, ascription_field],dim=0)
+        return output  #OUTPUT(heatmaps=heatmaps, ascription_field=ascription_field)  #torch.stack([heatmaps, ascription_field],dim=0)
     
 
 if __name__ == "__main__":

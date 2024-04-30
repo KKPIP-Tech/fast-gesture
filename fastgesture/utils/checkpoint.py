@@ -23,13 +23,15 @@ def ckpt_save(model, optim, epoch, pncs_result, save_pth, file_name, best=False,
         torch.save(ckpt, save_pth + "/last.pt")
         
         
-def ckpt_load(model_path):
+def ckpt_load(model_path, export=False):
     
     model = model_path['model']
     start_epoch = model_path['epoch'] + 1
     optim = model_path['optimizer']
+    pncs_result = model_path['pncs_result']
 
-    return model, optim, start_epoch
+    if not export: return model, optim, start_epoch
+    return model, pncs_result
 
 
 def create_path(path):

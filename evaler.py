@@ -59,8 +59,8 @@ class Evaler:
             
             forward = self.model(tensor_letterbox_img)
             
-            forward_heatmaps = forward.heatmaps
-            forward_asf = forward.ascription_field
+            forward_heatmaps = forward[:11]
+            forward_asf = forward[11:]
             
             keypoints_classes_num:int = tensor_kp_cls_labels.shape[0]
             

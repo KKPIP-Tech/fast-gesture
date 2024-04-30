@@ -34,7 +34,7 @@ class KeyPointsDH(nn.Module):
     def forward(self, x) -> list:
         # x = self.mlp(x)
         heatmaps = [head(x) for head in self.heads]
-        heatmaps = torch.stack(heatmaps, dim=0).squeeze(2)
+        # heatmaps = torch.stack(heatmaps, dim=0).squeeze(2)
         return heatmaps
 
 
@@ -88,7 +88,7 @@ class AscriptionDH(nn.Module):
         
     def forward(self, x) -> list:
         fields = [head(x) for head in self.heads]
-        fields = torch.stack(fields, dim=0).squeeze(2)
+        # fields = torch.stack(fields, dim=0).squeeze(2)
         return fields
     
 

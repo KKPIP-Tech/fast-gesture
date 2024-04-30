@@ -13,9 +13,15 @@ from copy import deepcopy
 import torch
 from torchvision import transforms
 
+
+import onnxruntime as ort
+
 from fastgesture.model.body import FastGesture
 from fastgesture.data.augment import letterbox
 from fastgesture.data.generate import inverse_vxvyd
+
+
+PNCS = {'points_number': 14874838, 'ncs': [{'point_id': 0, 'x_coefficient': 9.407407407407412, 'y_coefficient': 14.666666666666657}, {'point_id': 1, 'x_coefficient': 6.962962962962962, 'y_coefficient': 6.222222222222225}, {'point_id': 2, 'x_coefficient': 9.037037037037038, 'y_coefficient': 6.107634543178975}, {'point_id': 3, 'x_coefficient': 3.925925925925931, 'y_coefficient': 3.8139534883720785}, {'point_id': 4, 'x_coefficient': 9.70370370370371, 'y_coefficient': 11.181988742964354}, {'point_id': 5, 'x_coefficient': 2.740740740740762, 'y_coefficient': 3.7037037037037006}, {'point_id': 6, 'x_coefficient': 4.296296296296305, 'y_coefficient': 10.778739184178008}, {'point_id': 7, 'x_coefficient': 6.7407407407407405, 'y_coefficient': 4.518518518518526}, {'point_id': 8, 'x_coefficient': 2.831858407079645, 'y_coefficient': 7.629629629629631}, {'point_id': 9, 'x_coefficient': 10.740740740740748, 'y_coefficient': 4.740740740740739}, {'point_id': 10, 'x_coefficient': 6.666666666666664, 'y_coefficient': 6.962962962962969}]}
 
 
 class KeypointsCenter(TypedDict):
@@ -51,17 +57,14 @@ class FGInfer:
     
     def model_init(self) -> None:          
         with torch.no_grad():
-            self.model = FastGesture(
-                keypoints_num=self.keypoints_num,
-            #   cls_num=self.cls_num
-            ).to(self.device)
+            self.model = ort.InferenceSession(self.weight, providers=['TensorrtExecutionProvider', 'CUDAExecutionProvider'])
+            self.pncs = [{'point_id': 0, 'x_coefficient': 9.407407407407412, 'y_coefficient': 14.666666666666657}, {'point_id': 1, 'x_coefficient': 6.962962962962962, 'y_coefficient': 6.222222222222225}, {'point_id': 2, 'x_coefficient': 9.037037037037038, 'y_coefficient': 6.107634543178975}, {'point_id': 3, 'x_coefficient': 3.925925925925931, 'y_coefficient': 3.8139534883720785}, {'point_id': 4, 'x_coefficient': 9.70370370370371, 'y_coefficient': 11.181988742964354}, {'point_id': 5, 'x_coefficient': 2.740740740740762, 'y_coefficient': 3.7037037037037006}, {'point_id': 6, 'x_coefficient': 4.296296296296305, 'y_coefficient': 10.778739184178008}, {'point_id': 7, 'x_coefficient': 6.7407407407407405, 'y_coefficient': 4.518518518518526}, {'point_id': 8, 'x_coefficient': 2.831858407079645, 'y_coefficient': 7.629629629629631}, {'point_id': 9, 'x_coefficient': 10.740740740740748, 'y_coefficient': 4.740740740740739}, {'point_id': 10, 'x_coefficient': 6.666666666666664, 'y_coefficient': 6.962962962962969}]
+            # # self.model = torch.jit.load("./run/train/20240411/weights/jit.pt").cuda()
             
-            # self.model = torch.jit.load("./run/train/20240411/weights/jit.pt").cuda()
-            
-            checkpoints = torch.load(self.weight)
-            pre_trained = checkpoints['model']
-            self.pncs = checkpoints["pncs_result"][0]["ncs"]
-            self.model = pre_trained  #.load_state_dict(pre_trained, strict=True)
+            # checkpoints = torch.load(self.weight)
+            # pre_trained = checkpoints['model']
+            # self.pncs = checkpoints["pncs_result"][0]["ncs"]
+            # self.model = pre_trained  #.load_state_dict(pre_trained, strict=True)
             # self.model.eval()
     
     def infer(self, image:np.ndarray=None) -> Tuple[np.ndarray, List[KeypointsType]]:
@@ -75,26 +78,35 @@ class FGInfer:
             fill_color=114,
             single_channel=True
         )
-        del image
+        # del image
         # tensor image shape [1, 1, 320, 320]
-        tensor_image = transforms.ToTensor()(deepcopy(letterbox_image)).to(self.device).unsqueeze(0)
+        tensor_image = transforms.ToTensor()(deepcopy(letterbox_image)).to('cuda').unsqueeze(0).cpu().detach().numpy()
+        
+        input_img = np.asarray([[letterbox_image.astype(np.float32)]])
+        
+        # print(input_img.shape)
         
         # infer ---------------------------------------------------------------
-        forward = self.model(tensor_image)
+        forward = self.model.run(['output'], {"input":tensor_image})[0]
+        # print(forward[0].shape)
         del tensor_image
         f_keypoints_classification, f_ascription = forward[:self.keypoints_num], forward[self.keypoints_num:]
+        
+        # print(f"heatmap shape: {f_keypoints_classification.shape}")
         
         
         # get keypoints from heatmaps -----------------------------------------
         self.keypoints:List[KeypointsType] = []
         for keypoints_type in range(self.keypoints_num):
-            heatmap = f_keypoints_classification.permute(1, 0, 2, 3)[0][keypoints_type].cpu().detach().numpy()#.astype(np.float32)
+            heatmap = f_keypoints_classification.transpose(1, 0, 2, 3)[0][keypoints_type]#.astype(np.float32)
+            cv2.imshow(f"HEATMAP OUTPUT", heatmap)
             keypoint:KeypointsType = self.extract_heatmap_center(heatmap=heatmap, keypoints_type=keypoints_type)
             self.keypoints.append(keypoint)
         
         ascription_maps:list = []
         for asf_index in range(self.keypoints_num*2+2):  # 3 for vx, vy, dis
-            ascription_field_map = f_ascription.permute(1, 0, 2, 3)[0][asf_index].cpu().detach().numpy()#.astype(np.float32)
+            ascription_field_map = f_ascription.transpose(1, 0, 2, 3)[0][asf_index]#.astype(np.float32)
+            cv2.imshow(f"ASF OUTPUT", ascription_field_map)
             ascription_maps.append(ascription_field_map)
         
         self.get_asf_direction(ascription_maps=ascription_maps)
@@ -211,7 +223,7 @@ class FGInfer:
     
 if __name__ == "__main__":
     import time
-    weight:str = "/home/kd/Documents/Codes/fast-gesture/run/train/20240418_1/weights/last.pt"
+    weight:str = "original.onnx"
     
     fg_model = FGInfer(device='cuda', img_size=(160, 160), weights=weight, conf=0.2, keypoints_num=11)
     
@@ -219,12 +231,13 @@ if __name__ == "__main__":
     
     img = "/home/kd/WD_1_Data4T/Datasets/AmountData3/images/OpenGesture_89388240229.jpg"
     
-    
+    frame = cv2.imread(img)  
     while True:
         st = time.time()
-        frame = cv2.imread(img)       
+             
         # ret, frame = capture.read()
         cv2.imshow(f"Frame", frame)
+        fg_model.infer(image=frame)
         letterbox_image, keypoints = fg_model.infer(image=frame)
         letterbox_image = cv2.cvtColor(letterbox_image, cv2.COLOR_GRAY2BGR)
         for keypoint in keypoints:

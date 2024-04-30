@@ -1,32 +1,21 @@
-# 作者：Da Kuang
-# 创建时间：2023/02/10
-# 修改时间：2023/12/17
+# author：Da Kuang
+# create time：2023/02/10
+# modify time：2023/12/17
 
-# 配置文件内容如下：
+# datasets
+train_set: "/home/kd/Documents/fg_datasets_2024/train"
+val_set: "/home/kd/Documents/fg_datasets_2024/val"
 
-#     root: 手势数据集的根目录，用于指定数据集存储的文件夹路径。
-#     nc: 手势类别的数量，即数据集中不同手势的种类数量。
-#     resolution: 图像分辨率。
-#     names: 手势类别的名称列表，包含了每个手势类别的名称。
+keypoints_classes_num: 11
+keypoint_radius: 2
 
-# root: "/home/kd/WD_1_Data4T/Datasets/AmountData3"
-root: "/home/kd/Documents/AmountData4"
-
-resolution: [1280, 720]
-
-nc: 5  # names count
-
-names: ["one", "two", "five", "hold", "pickup"]
-
-target_points_id: [0, 2, 4, 5, 8, 9, 12, 13, 16, 17, 20]
-
-kc: 21  # keypoints count
-
-kernel_size: [25, 25]
-sigma_x: 0
-sigma_y: 0
-
-max_hand_num: 5
-
+# data augmentation
+exposure: [-200, 150]
 degree: 40
+sp_noise: 0.4
+scale: [0.6, 1]
+translate: 0.2
+
+
+
 
