@@ -19,7 +19,7 @@ from fastgesture.layers.conv import (
 )
 from fastgesture.layers.dsc import DepthwiseSeparableConv
 from fastgesture.layers.mlp import MLP
-from fastgesture.layers.detectHead import KeyPointsDH, AscriptionDH, BboxDH
+from fastgesture.layers.detectHead import KeyPointsDH, AscriptionDH
 
 class FastGesture(nn.Module):
     def __init__(self, keypoints_num:int=11) -> None:

@@ -11,7 +11,6 @@ import cv2
 import numpy as np
 from copy import deepcopy
 import random
-from tqdm import tqdm
 
 import torch
 import torch.utils.data
