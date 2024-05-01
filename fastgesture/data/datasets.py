@@ -54,6 +54,11 @@ class TrainDatasets(torch.utils.data.Dataset):
         
         self._keypoints_cls_num:int = config['keypoints_classes_num']
         self._keypoint_radius:int = config['keypoint_radius']
+        
+        # load hyper params -------------------------------
+        self._hyper_loss_weight:list = config['loss_weight']
+        self._hyper_lr_step_size:int = config['step_size']
+        self._hyper_lr_gamma:float = config['gamma']
                 
         # load augmentation params ------------------------
         self._exposure_limit:list[int] = config['exposure']
@@ -80,6 +85,13 @@ class TrainDatasets(torch.utils.data.Dataset):
     
     def get_keypoints_class_number(self) -> int:
         return self._keypoints_cls_num
+    
+    def get_hyper_params(self) -> tuple:
+        return (
+            self._hyper_loss_weight,
+            self._hyper_lr_step_size,
+            self._hyper_lr_gamma
+        )
     
     def __getitem__(self, index:int):    
         

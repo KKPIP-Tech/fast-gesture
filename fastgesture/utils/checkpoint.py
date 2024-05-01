@@ -3,10 +3,11 @@ from copy import deepcopy
 import torch
 
 
-def ckpt_save(model, optim, epoch, pncs_result, save_pth, file_name, best=False, last=False):
+def ckpt_save(model, optim, scaler, epoch, pncs_result, save_pth, file_name, best=False, last=False):
     ckpt = {
-        "model": deepcopy(model),
-        "optimizer": deepcopy(optim.state_dict()),
+        "model": model,
+        "optimizer": optim.state_dict(),
+        "scaler": scaler.state_dict(),
         "epoch": epoch,
         "pncs_result":deepcopy(pncs_result)
     }
@@ -28,9 +29,10 @@ def ckpt_load(model_path, export=False):
     model = model_path['model']
     start_epoch = model_path['epoch'] + 1
     optim = model_path['optimizer']
+    scaler = model_path['scaler']
     pncs_result = model_path['pncs_result']
 
-    if not export: return model, optim, start_epoch
+    if not export: return model, optim, scaler, start_epoch
     return model, pncs_result
 
 

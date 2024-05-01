@@ -86,16 +86,26 @@ class Train:
         # set optimizer -----------------------------------
         user_optimizer_setting:str = option.optimizer
         self._optimizer = select_optim(net=self._model, opt=option, user_set_optim=user_optimizer_setting)
-        self._scheduler = optim.lr_scheduler.StepLR(self._optimizer, step_size=20, gamma=0.98)
-        self._scaler = GradScaler()
+        
+        self._scaler = GradScaler(enabled=True)
         
         # process resume process --------------------------
         if checkpoints is not None:
-            resume_model, resume_optim, resume_start_epoch = ckpt_load(checkpoints)
-            self._model = resume_model
+            resume_model, resume_optim, resume_scaler, resume_start_epoch = ckpt_load(checkpoints)
+            self._model.load_state_dict(resume_model.state_dict())
             self._start_epoch = resume_start_epoch
             self._optimizer.load_state_dict(resume_optim)
-            self._scheduler = optim.lr_scheduler.StepLR(self._optimizer, step_size=20, gamma=0.98, last_epoch=self._start_epoch-1)
+            self._scaler.load_state_dict(resume_scaler)
+            self._scheduler = optim.lr_scheduler.StepLR(
+                self._optimizer, 
+                step_size=self._hyper_lr_step_size, gamma=self._hyper_lr_gamma, 
+                last_epoch=self._start_epoch-1
+            )
+        else:
+            self._scheduler = optim.lr_scheduler.StepLR(
+                self._optimizer, 
+                step_size=self._hyper_lr_step_size, gamma=self._hyper_lr_gamma
+            )
         
     def train(self) -> None:
         for epoch in range(self._start_epoch, self._max_epoch):
@@ -118,7 +128,7 @@ class Train:
                 
                 self._optimizer.zero_grad()
                 
-                with autocast(dtype=torch.bfloat16):
+                with autocast(enabled=True, dtype=torch.bfloat16):
                     forward = self._model(tensor_letterbox_img)
                     forward_heatmaps, forward_asf_maps = forward[:self._keypoints_classes_num], forward[self._keypoints_classes_num:]
                     
@@ -157,10 +167,10 @@ class Train:
             
             # save checkpoints
             ckpt_save(
-                model=self._model, optim=self._optimizer, epoch=epoch, pncs_result=self._train_pncs_result, save_pth=self._save_path, file_name=f"epoch_{str(epoch)}",
+                model=self._model, optim=self._optimizer, scaler=self._scaler, epoch=epoch, pncs_result=self._train_pncs_result, save_pth=self._save_path, file_name=f"epoch_{str(epoch)}",
             )
             ckpt_save(
-                model=self._model, optim=self._optimizer, epoch=epoch, pncs_result=self._train_pncs_result, save_pth=self._save_path, file_name=f"epoch_{str(epoch)}", last=True
+                model=self._model, optim=self._optimizer, scaler=self._scaler, epoch=epoch, pncs_result=self._train_pncs_result, save_pth=self._save_path, file_name=f"epoch_{str(epoch)}", last=True
             )
             
             # init Evaler -------------------------------------
@@ -228,7 +238,10 @@ class Train:
             cv2.imshow(f"forward asf_y_minus", image_to_show)
             cv2.waitKey(1)
         
-        loss = keypoints_loss*1.5 + asf_x_loss*0.2 + asf_y_loss*0.2 + x_minus_loss*0.3 + y_minus_loss*0.3
+        # use loss weight from hyper params
+        loss = keypoints_loss*self._hyper_loss_weight[0] + asf_x_loss*self._hyper_loss_weight[1] + \
+            asf_y_loss*self._hyper_loss_weight[2] + x_minus_loss*self._hyper_loss_weight[3] + y_minus_loss*self._hyper_loss_weight[4]
+        # loss = keypoints_loss*1.5 + asf_x_loss*0.2 + asf_y_loss*0.2 + x_minus_loss*0.3 + y_minus_loss*0.3
         return loss
 
     def _load_train_datasets(self, img_size:Union[int, list], batch_size:int, workers:int) -> DataLoader:
@@ -239,6 +252,13 @@ class Train:
         
         datasets:torch.utils.data.Dataset = TrainDatasets(config_file=self._train_config_file, img_size=img_size, 
                                      pncs=deepcopy(self._train_pncs_result), limit=None)
+        
+        # get hyper params
+        hyper_params = datasets.get_hyper_params()
+        self._hyper_loss_weight:list = hyper_params[0]
+        self._hyper_lr_step_size:int = hyper_params[1]
+        self._hyper_lr_gamma:float = hyper_params[2]
+        
         self._keypoints_classes_num:int = datasets.get_keypoints_class_number()        
         dataloader:DataLoader = DataLoader(dataset=datasets, batch_size=batch_size,
                                            num_workers=workers, shuffle=True)
