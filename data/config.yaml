@@ -15,8 +15,10 @@ gamma: 0.98
 
 # data augmentation
 exposure: [-200, 150]
+exposure_p: 0.6
 degree: 40
 sp_noise: 0.4
+sp_noise_p: 0.6
 scale: [0.6, 1]
 translate: 0.2
 

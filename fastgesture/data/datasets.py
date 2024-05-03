@@ -62,8 +62,10 @@ class TrainDatasets(torch.utils.data.Dataset):
                 
         # load augmentation params ------------------------
         self._exposure_limit:list[int] = config['exposure']
+        self._exposure_p:float = config['exposure_p']
         self._degree_limit:int = config['degree']
         self._sp_noise_limit:float = config['sp_noise']
+        self._sp_noise_p:float = config['sp_noise_p']
         self._scale_limit:list[float] = config['scale']
         self._translate_limit:float = config['translate']
         
@@ -108,10 +110,12 @@ class TrainDatasets(torch.utils.data.Dataset):
         _original_image = cv2.imread(image_path)
         
         # exposure
-        _original_image = exposure(image=_original_image, exposure=_exposure)
+        if random.uniform(0, 1) >= (1-self._exposure_p):
+            _original_image = exposure(image=_original_image, exposure=_exposure)
         
         # sp_noise
-        _original_image = self._sp_noise(image=_original_image, proportion=_sp_noise)
+        if random.uniform(0, 1) >= (1-self._sp_noise_p):
+            _original_image = self._sp_noise(image=_original_image, proportion=_sp_noise)
         
         # rotate
         _original_image, _rotate_matrix = rotate_image(image=_original_image, angle=_degree)
