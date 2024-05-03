@@ -53,7 +53,7 @@ class Train:
         
         self._max_epoch:int = option.epochs
         self._start_epoch:int = 0
-        self._view:bool = option.view  # Demonstrate the training process
+        self._view:bool = not option.view  # Demonstrate the training process
         
         # load datasets -----------------------------------
         self._dataloader_workers:int = option.workers if option.workers < get_core_num()[1] else get_core_num()[1]
@@ -315,7 +315,7 @@ if __name__ == "__main__":
     parse.add_argument('--lr', type=float, default=0.001)
     parse.add_argument('--optimizer', type=str, default='Adam', help='only support: [Adam, AdamW, SGD, ASGD]')
     parse.add_argument('--resume', nargs='?', const=True, default=False, help="Choice one path to resume training")
-    parse.add_argument('--view', action='store_false', help='chose to unable shuffle in Dataloader')
+    parse.add_argument('--view', action='store_false', help='chose to able training process')
     parse = parse.parse_args()
     
     trainer:Train = run(option=parse)
