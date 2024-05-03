@@ -88,7 +88,7 @@ If you change value of `img-size`, you must delet it. Otherwise, the training re
 
 Single GPU
 ```
-python train.py --batch 32 --workers 28 --save_name 20240430 --lr 0.001 
+python train.py --batch 32 --workers 28 --save_name 20240430 --lr 0.001 --view
 ```
 </details>
 

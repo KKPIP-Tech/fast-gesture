@@ -10,17 +10,17 @@ keypoints_classes_num: 11
 keypoint_radius: 2
 
 loss_weight: [1.5, 0.2, 0.2, 0.3, 0.3]
-step_size: 9
-gamma: 0.98
+step_size: 10
+gamma: 0.9
 
 # data augmentation
-exposure: [-200, 150]
+exposure: [-180, 130]
 exposure_p: 0.6
 degree: 40
 sp_noise: 0.4
 sp_noise_p: 0.6
-scale: [0.6, 1]
-translate: 0.2
+scale: [0.6, 1.2]
+translate: 0.3
 
 
 
