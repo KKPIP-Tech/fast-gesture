@@ -9,8 +9,8 @@ val_set: "/home/kd/Documents/fg_datasets_2024/val"
 keypoints_classes_num: 11
 keypoint_radius: 2
 
-loss_weight: [1.5, 0.2, 0.2, 0.3, 0.3]
-step_size: 10
+loss_weight: [2.0, 0.2, 0.2, 0.3, 0.3]
+step_size: 20
 gamma: 0.9
 
 # data augmentation

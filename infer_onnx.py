@@ -80,7 +80,7 @@ class FGInfer:
         )
         # del image
         # tensor image shape [1, 1, 320, 320]
-        tensor_image = transforms.ToTensor()(deepcopy(letterbox_image)).to('cuda').unsqueeze(0).cpu().detach().numpy()
+        tensor_image = transforms.ToTensor()(deepcopy(letterbox_image)).to('cuda').unsqueeze(0).cpu().detach().numpy().astype(np.float16)
         
         input_img = np.asarray([[letterbox_image.astype(np.float32)]])
         
@@ -99,14 +99,14 @@ class FGInfer:
         self.keypoints:List[KeypointsType] = []
         for keypoints_type in range(self.keypoints_num):
             heatmap = f_keypoints_classification.transpose(1, 0, 2, 3)[0][keypoints_type]#.astype(np.float32)
-            cv2.imshow(f"HEATMAP OUTPUT", heatmap)
+            cv2.imshow(f"HEATMAP OUTPUT", heatmap.astype(np.float32))
             keypoint:KeypointsType = self.extract_heatmap_center(heatmap=heatmap, keypoints_type=keypoints_type)
             self.keypoints.append(keypoint)
         
         ascription_maps:list = []
         for asf_index in range(self.keypoints_num*2+2):  # 3 for vx, vy, dis
             ascription_field_map = f_ascription.transpose(1, 0, 2, 3)[0][asf_index]#.astype(np.float32)
-            cv2.imshow(f"ASF OUTPUT", ascription_field_map)
+            cv2.imshow(f"ASF OUTPUT", ascription_field_map.astype(np.float32))
             ascription_maps.append(ascription_field_map)
         
         self.get_asf_direction(ascription_maps=ascription_maps)
@@ -223,9 +223,9 @@ class FGInfer:
     
 if __name__ == "__main__":
     import time
-    weight:str = "original.onnx"
+    weight:str = "./export_model/small_net_test_fp16.onnx"
     
-    fg_model = FGInfer(device='cuda', img_size=(160, 160), weights=weight, conf=0.2, keypoints_num=11)
+    fg_model = FGInfer(device='cuda', img_size=(160, 160), weights=weight, conf=0.1, keypoints_num=11)
     
     capture = cv2.VideoCapture(0)
     
@@ -235,7 +235,7 @@ if __name__ == "__main__":
     while True:
         st = time.time()
              
-        # ret, frame = capture.read()
+        ret, frame = capture.read()
         cv2.imshow(f"Frame", frame)
         fg_model.infer(image=frame)
         letterbox_image, keypoints = fg_model.infer(image=frame)

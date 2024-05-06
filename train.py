@@ -1,3 +1,4 @@
+
 import os
 import sys
 import argparse
@@ -154,10 +155,10 @@ class Train:
                     gpu_memory_bg = round(gpu_memory_bytes / 1024 / 1024 / 1024, 2)
                     
                     pbar.set_description(
-                        f"[Epoch {epoch}, GPU {gpu_memory_bg} G, cur_lr {self._current_lr:.10f}, avg_l {avg_loss:.10f}] -> "
+                        f"[Epoch {epoch}, GPU {gpu_memory_bg} G, cur_lr {self._current_lr:.6f}, avg_l {avg_loss:.4f}] -> "
                     )
                 else:
-                    pbar.set_description(f"[Epoch {epoch}, cur_lr {self._current_lr:.10f}, avg_l {avg_loss:.10f}] -> ")
+                    pbar.set_description(f"[Epoch {epoch}, cur_lr {self._current_lr:.6f}, avg_l {avg_loss:.4f}] -> ")
                 
                 # write train log into txt
                 with open(f"{self._save_path}/log.txt", "a") as f:
@@ -215,10 +216,10 @@ class Train:
                 forward_asf_maps[asf_index], label_asf_maps[asf_index]
             )
         if self._view:
-            image_to_show = label_asf_maps.permute(1, 0, 2, 3)[0][12].to(torch.float32).cpu().detach().numpy().astype(np.float32) 
+            image_to_show = label_asf_maps.permute(1, 0, 2, 3)[0][self._keypoints_classes_num].to(torch.float32).cpu().detach().numpy().astype(np.float32) 
             cv2.imshow(f"asf_label y", image_to_show)
 
-            image_to_show = forward_asf_maps.permute(1, 0, 2, 3)[0][12].to(torch.float32).cpu().detach().numpy().astype(np.float32)  
+            image_to_show = forward_asf_maps.permute(1, 0, 2, 3)[0][self._keypoints_classes_num].to(torch.float32).cpu().detach().numpy().astype(np.float32)  
             cv2.imshow(f"forward asf y", image_to_show)
         
         # comput x minus loss -----------------------------
