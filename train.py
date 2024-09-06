@@ -143,8 +143,6 @@ class Train:
                 
                 self._scaler.scale(loss).backward()
                 
-                # loss.backward()
-                # self._optimizer.step()
                 self._scaler.step(self._optimizer)
                 self._scaler.update()
                 self._total_loss += loss.item()

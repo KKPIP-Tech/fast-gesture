@@ -53,16 +53,12 @@ class FGInfer:
         with torch.no_grad():
             self.model = FastGesture(
                 keypoints_num=self.keypoints_num,
-            #   cls_num=self.cls_num
             ).to(self.device)
-            
-            # self.model = torch.jit.load("./run/train/20240411/weights/jit.pt").cuda()
             
             checkpoints = torch.load(self.weight)
             pre_trained = checkpoints['model']
             self.pncs = checkpoints["pncs_result"][0]["ncs"]
-            self.model = pre_trained  #.load_state_dict(pre_trained, strict=True)
-            # self.model.eval()
+            self.model = pre_trained  
     
     def infer(self, image:np.ndarray=None) -> Tuple[np.ndarray, List[KeypointsType]]:
     
@@ -76,7 +72,7 @@ class FGInfer:
             single_channel=True
         )
         del image
-        # tensor image shape [1, 1, 320, 320]
+
         tensor_image = transforms.ToTensor()(deepcopy(letterbox_image)).to(self.device).unsqueeze(0)
         
         # infer ---------------------------------------------------------------
@@ -162,10 +158,7 @@ class FGInfer:
                 
                 vx = ascription_maps[keypoints_type][center_y][center_x]
                 vy = ascription_maps[keypoints_type + self.keypoints_num][center_y][center_x]
-                
-                # vx = self.find_nearest_gaussian(ascription_maps[keypoints_type], (center_x, center_y))
-                # vy = self.find_nearest_gaussian(ascription_maps[keypoints_type+self.keypoints_num], (center_x, center_y))
-                
+
                 x_coe = self.pncs[keypoints_type]["x_coefficient"]
                 y_coe = self.pncs[keypoints_type]["y_coefficient"]
                 
@@ -173,17 +166,14 @@ class FGInfer:
                 y_minus:bool = True if ascription_maps[-1][center_y][center_x] > 0.3 else False
                 
                 print(f"max value in number {keypoints_type} asf map is: {np.max(ascription_maps[keypoints_type])}")
-                # vx = vx*(self.img_size[0]*6)
-                # vy = vy*(self.img_size[1]*6)
-                
+
                 vx = x_coe*vx
                 if x_minus:
                     vx = vx*-1
                 vy = y_coe*vy
                 if y_minus:
                     vy = vy*-1
-                
-                # print(f"xydis {vx, vy}")
+
                 end_x, end_y = inverse_vxvyd((center_x, center_y), vx, vy)
                 new_points_info:KeypointsCenter = {
                     "keypoint_id": keypoint_id,
@@ -223,14 +213,12 @@ if __name__ == "__main__":
     while True:
         st = time.time()
         frame = cv2.imread(img)       
-        # ret, frame = capture.read()
         cv2.imshow(f"Frame", frame)
         letterbox_image, keypoints = fg_model.infer(image=frame)
         letterbox_image = cv2.cvtColor(letterbox_image, cv2.COLOR_GRAY2BGR)
         for keypoint in keypoints:
             keypoints_type = keypoint["type"]
             points = keypoint["points"]
-            # print(f"type: {keypoints_type}|points: {points}")
             for point in points:
                 center_x = point["center_x"]
                 center_y = point["center_y"]
