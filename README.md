@@ -1,4 +1,4 @@
-# Fast Gesture
+# Fast Gesture (Preview Release)
 
 ## 1. Introduce
 
@@ -124,6 +124,8 @@ In the dataset, the two components of the vector from each point to the center p
 ***The PNCS parameters will be printed in the console before each training session starts, and this parameter will only appear once, so it needs to be recorded and saved properly.***
 
 ## 6. Deployment
+
+You can use the `Fast_Gesture_Test_160x160_fp32.onnx` test program， this is the ONNX model exported by the author.
 
 <p align="center">
 <img src="./assets/Input_Output.png" height="300px"/>
