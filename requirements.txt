@@ -1,0 +1,24 @@
+# pip install -r requirements.txt
+# python 3.10 environment
+
+torch>=1.13.0
+torchvision>=0.14.0
+# recommend install cuda 11.8 with torch 2.2.1 use follow command: more faster than torch 1.13.0 in training
+# pip install torch==2.2.1 torchvision==0.17.1 torchaudio==2.2.1 --index-url https://download.pytorch.org/whl/cu118
+
+torchsummary==1.5.1  # print model structure
+tensorboard>=2.7.0
+thop  # FLOPs computation
+
+numpy>=1.24.0
+opencv-python>=4.1.2
+pillow
+matplotlib
+scipy>=1.4.1
+
+tqdm>=4.41.0
+psutil
+pyyaml
+
+onnx>=1.14.0  # export onnx model
+onnxruntime-gpu>=1.14.0  # run onnx infer

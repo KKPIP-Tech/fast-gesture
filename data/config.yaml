@@ -1,0 +1,27 @@
+# author：Da Kuang
+# create time：2023/02/10
+# modify time：2023/12/17
+
+# datasets
+train_set: "/home/kd/Documents/fg_datasets_2024/train"
+val_set: "/home/kd/Documents/fg_datasets_2024/val"
+
+keypoints_classes_num: 11
+keypoint_radius: 2
+
+loss_weight: [2.0, 0.2, 0.2, 0.3, 0.3]
+step_size: 20
+gamma: 0.9
+
+# data augmentation
+exposure: [-180, 130]
+exposure_p: 0.6
+degree: 40
+sp_noise: 0.4
+sp_noise_p: 0.6
+scale: [0.6, 1.2]
+translate: 0.3
+
+
+
+
